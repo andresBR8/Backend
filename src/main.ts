@@ -28,13 +28,8 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document);
 
   // Habilitar CORS
-  app.enableCors({
-    origin: 'http://127.0.0.1:5174', // Ajusta esto a la URL de tu frontend
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-  });
+  app.enableCors();
 
-  await app.listen(3000);
+  await app.listen(process.env.PORT || 3000);
 }
 bootstrap();
