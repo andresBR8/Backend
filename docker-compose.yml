@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: andres
+      POSTGRES_PASSWORD: andres
+      POSTGRES_DB: proyectodb
+    ports:
+      - 5499:5432

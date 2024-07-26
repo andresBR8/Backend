@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String                @id @default(cuid())
+  username                 String                @unique
+  email                    String                @unique
+  password                 String
+  name                     String?
+  role                     String
+  resetToken               String?
+  resetTokenExpiration     DateTime?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  historialAsignaciones    AsignacionHistorial[]
+  asignaciones             Asignacion[]
+  reasignacionesAnteriores Reasignacion[]        @relation("UsuarioAnterior")
+  reasignacionesNuevas     Reasignacion[]        @relation("UsuarioNuevo")
+
+  @@map("users")
+}
+
+model Personal {
+  id                       Int                   @id @default(autoincrement())
+  nombre                   String
+  ci                       String                @unique
+  fkCargo                  Int
+  fkUnidad                 Int
+  historialAsignaciones    AsignacionHistorial[]
+  asignaciones             Asignacion[]
+  cargo                    Cargo                 @relation(fields: [fkCargo], references: [id])
+  unidad                   Unidad                @relation(fields: [fkUnidad], references: [id])
+  reasignacionesAnteriores Reasignacion[]        @relation("PersonalAnterior")
+  reasignacionesNuevas     Reasignacion[]        @relation("PersonalNuevo")
+
+  @@map("personal")
+}
+
+model Cargo {
+  id       Int        @id @default(autoincrement())
+  nombre   String     @unique
+  personal Personal[]
+
+  @@map("cargos")
+}
+
+model Unidad {
+  id       Int        @id @default(autoincrement())
+  nombre   String     @unique
+  personal Personal[]
+
+  @@map("unidades")
+}
+
+model Partida {
+  id                     Int            @id @default(autoincrement())
+  codigoPartida          String         @unique
+  nombre                 String
+  vidaUtil               Int
+  porcentajeDepreciacion Float
+  activoModelos          ActivoModelo[]
+
+  @@map("partidas")
+}
+
+model ActivoModelo {
+  id             Int            @id @default(autoincrement())
+  fkPartida      Int
+  nombre         String
+  descripcion    String
+  fechaIngreso   DateTime
+  costo          Float
+  estado         String
+  codigoAnterior String?
+  codigoNuevo    String         @unique
+  ordenCompra    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now())
+  createdBy      String
+  updatedBy      String?
+  cantidad       Int
+  partida        Partida        @relation(fields: [fkPartida], references: [id])
+  activoUnidades ActivoUnidad[]
+
+  @@map("activo_modelos")
+}
+
+model ActivoUnidad {
+  id                  Int                      @id @default(autoincrement())
+  fkActivoModelo      Int
+  codigo              String                   @unique
+  asignado            Boolean                  @default(false)
+  activoModelo        ActivoModelo             @relation(fields: [fkActivoModelo], references: [id])
+  asignacionActivos   AsignacionActivoUnidad[]
+  asignacionHistorial AsignacionHistorial[]
+  bajas               Baja[]
+  depreciaciones      Depreciacion[]
+  mantenimientos      Mantenimiento[]
+  reasignaciones      Reasignacion[]
+
+  @@map("activo_unidades")
+}
+
+model Asignacion {
+  id                Int                      @id @default(autoincrement())
+  fkUsuario         String
+  fkPersonal        Int
+  fechaAsignacion   DateTime
+  detalle           String
+  asignacionActivos AsignacionActivoUnidad[]
+  personal          Personal                 @relation(fields: [fkPersonal], references: [id])
+  usuario           User                     @relation(fields: [fkUsuario], references: [id])
+
+  @@map("asignaciones")
+}
+
+model AsignacionHistorial {
+  id              Int          @id @default(autoincrement())
+  fkActivoUnidad  Int
+  fkUsuario       String
+  fkPersonal      Int
+  fechaAsignacion DateTime
+  detalle         String
+  activoUnidad    ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+  personal        Personal     @relation(fields: [fkPersonal], references: [id])
+  usuario         User         @relation(fields: [fkUsuario], references: [id])
+
+  @@map("asignacion_historial")
+}
+
+model AsignacionActivoUnidad {
+  id             Int          @id @default(autoincrement())
+  fkAsignacion   Int
+  fkActivoUnidad Int
+  activoUnidad   ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+  asignacion     Asignacion   @relation(fields: [fkAsignacion], references: [id])
+
+  @@map("asignacion_activo_unidades")
+}
+
+model Mantenimiento {
+  id             Int          @id @default(autoincrement())
+  fkActivoUnidad Int
+  fecha          DateTime
+  descripcion    String
+  activoUnidad   ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+
+  @@map("mantenimientos")
+}
+
+model Baja {
+  id             Int          @id @default(autoincrement())
+  fkActivoUnidad Int
+  fecha          DateTime
+  motivo         String
+  activoUnidad   ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+
+  @@map("bajas")
+}
+
+model Depreciacion {
+  id             Int          @id @default(autoincrement())
+  fkActivoUnidad Int
+  fecha          DateTime
+  valor          Float
+  activoUnidad   ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+
+  @@map("depreciaciones")
+}
+
+model Reasignacion {
+  id                 Int          @id @default(autoincrement())
+  fkActivoUnidad     Int
+  fkUsuarioAnterior  String
+  fkUsuarioNuevo     String
+  fkPersonalAnterior Int
+  fkPersonalNuevo    Int
+  fechaReasignacion  DateTime     @default(now())
+  detalle            String
+  activoUnidad       ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+  personalAnterior   Personal     @relation("PersonalAnterior", fields: [fkPersonalAnterior], references: [id])
+  personalNuevo      Personal     @relation("PersonalNuevo", fields: [fkPersonalNuevo], references: [id])
+  usuarioAnterior    User         @relation("UsuarioAnterior", fields: [fkUsuarioAnterior], references: [id])
+  usuarioNuevo       User         @relation("UsuarioNuevo", fields: [fkUsuarioNuevo], references: [id])
+
+  @@map("reasignaciones")
+}
