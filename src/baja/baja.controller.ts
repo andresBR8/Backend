@@ -85,4 +85,20 @@ export class BajaController {
       throw new NotFoundException('Error al eliminar la baja');
     }
   }
+
+  @Patch(':id/restaurar')
+  @ApiOperation({ summary: 'Restaurar un activo dado de baja' })
+  @ApiResponse({ status: 200, description: 'El activo ha sido restaurado exitosamente' })
+  @ApiResponse({ status: 404, description: 'Baja no encontrada' })
+  async restaurar(@Param('id') id: string, @Res() res: Response) {
+    try {
+      const baja = await this.bajaService.restaurarBaja(+id);
+      return res.status(HttpStatus.OK).json({
+        message: 'Activo restaurado exitosamente',
+        data: baja,
+      });
+    } catch (error) {
+      throw new NotFoundException(`Error al restaurar la baja: ${error.message}`);
+    }
+  }
 }

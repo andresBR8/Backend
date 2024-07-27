@@ -19,13 +19,14 @@ export class ActivoUnidadService {
         },
       });
     } catch (error) {
-      throw new BadRequestException(`Error creating activo unidad: ${error.message}`);
+      throw new BadRequestException(`Error creando activo unidad: ${error.message}`);
     }
   }
 
-  async getActivosUnidad(): Promise<ActivoUnidad[]> {
+  async getActivosUnidad(): Promise<Partial<ActivoUnidad>[]> {
     return this.prisma.activoUnidad.findMany({
-      include: { activoModelo: true, asignacionActivos: true, mantenimientos: true, bajas: true, depreciaciones: true },
+      include: { activoModelo: { select: { descripcion: true, costo: true, estado: true, partida: { select: { vidaUtil: true, nombre: true, porcentajeDepreciacion:true } } } },mantenimientos: true, asignacionActivos: true, bajas: true, 
+      depreciaciones: { select: { fecha: true, valor: true } } },
     });
   }
 

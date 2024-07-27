@@ -81,7 +81,7 @@ export class AuthService {
         secure: false,
         auth: {
             user: 'activosfijosuaemi@gmail.com',
-            pass: 'iqne fchj zjsw dwzp',
+            pass: process.env.EMAIL_PASSWORD,
         },
     });
 

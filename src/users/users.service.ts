@@ -36,6 +36,7 @@ export class UsersService {
       data,
     });
     this.notificationsService.sendNotification('user-changed', user);
+    
     return user;
   }
 

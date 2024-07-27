@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Res, HttpStatus, Bad
 import { DepreciacionService } from './depreciacion.service';
 import { CreateDepreciacionDto } from './dto/create-depreciacion.dto';
 import { UpdateDepreciacionDto } from './dto/update-depreciacion.dto';
+import { DepreciarPorModeloDto } from './dto/depreciar-por-modelo.dto'
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -83,6 +84,53 @@ export class DepreciacionController {
       });
     } catch (error) {
       throw new NotFoundException('Error al eliminar la depreciación');
+    }
+  }
+
+  @Post('depreciar-por-modelo')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  @ApiOperation({ summary: 'Depreciar todas las unidades de un modelo de activo' })
+  @ApiResponse({ status: 201, description: 'Las unidades han sido depreciadas exitosamente' })
+  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
+  async depreciarPorModelo(@Body() depreciarPorModeloDto: DepreciarPorModeloDto, @Res() res: Response) {
+    try {
+      const depreciaciones = await this.depreciacionService.depreciarPorModelo(depreciarPorModeloDto.fkActivoModelo, depreciarPorModeloDto.fecha, depreciarPorModeloDto.valor);
+      return res.status(HttpStatus.CREATED).json({
+        message: 'Unidades depreciadas exitosamente',
+        data: depreciaciones,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al depreciar por modelo: ${error.message}`);
+    }
+  }
+
+  @Post('depreciar-todos')
+  @ApiOperation({ summary: 'Depreciar todos los activos automáticamente' })
+  @ApiResponse({ status: 201, description: 'Todos los activos han sido depreciados exitosamente' })
+  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
+  async depreciarTodos(@Res() res: Response) {
+    try {
+      await this.depreciacionService.depreciarTodosActivos();
+      return res.status(HttpStatus.CREATED).json({
+        message: 'Todos los activos han sido depreciados exitosamente',
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al depreciar todos los activos: ${error.message}`);
+    }
+  }
+
+  @Get('reporte')
+  @ApiOperation({ summary: 'Obtener un reporte de todas las depreciaciones' })
+  @ApiResponse({ status: 200, description: 'Reporte de todas las depreciaciones' })
+  async getReporte(@Res() res: Response) {
+    try {
+      const reporte = await this.depreciacionService.getReporteDepreciacion();
+      return res.status(HttpStatus.OK).json({
+        message: 'Reporte de depreciaciones obtenido exitosamente',
+        data: reporte,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al obtener el reporte de depreciaciones: ${error.message}`);
     }
   }
 }

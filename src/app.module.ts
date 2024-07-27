@@ -25,6 +25,7 @@ import { DepreciacionModule } from './depreciacion/depreciacion.module';
 import { NotificationsModule } from './notificaciones/notificaciones.module';
 import { ReasignacionModule } from './reasignacion/reasignacion.module';
 import {BackupModule} from './backup/backup.module';
+import { ReportesModule } from './reportes/reportes.module';
 
 
 @Module({
@@ -49,7 +50,8 @@ import {BackupModule} from './backup/backup.module';
     DepreciacionModule,
     NotificationsModule,
     ReasignacionModule,
-    BackupModule
+    BackupModule,
+    ReportesModule
   ],
   controllers: [HelloController, UploadController],
   providers: [

@@ -3,10 +3,15 @@ import { PrismaService } from '../prisma.service';
 import { ActivoModelo, Prisma } from '@prisma/client';
 import { CreateActivoModeloDto } from './dto/create-activo-modelo.dto';
 import { UpdateActivoModeloDto } from './dto/update-activo-modelo.dto';
+import { NotificationsService } from 'src/notificaciones/notificaciones.service';
 
 @Injectable()
 export class ActivoModeloService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService
+  ) {}
+  
 
   async createActivoModelo(createActivoModeloDto: CreateActivoModeloDto): Promise<ActivoModelo> {
     const {
@@ -58,13 +63,22 @@ export class ActivoModeloService {
         },
       });
     }
+    this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
 
     return activoModelo;
   }
 
   async getActivosModelos(): Promise<ActivoModelo[]> {
     return this.prisma.activoModelo.findMany({
-      include: { partida: true, activoUnidades: true },
+      include: {
+        partida: {
+          select: {
+            vidaUtil: true,
+            porcentajeDepreciacion: true
+          }
+        },
+        activoUnidades: true
+      },
     });
   }
 
@@ -76,10 +90,22 @@ export class ActivoModeloService {
   }
 
   async updateActivoModelo(id: number, data: UpdateActivoModeloDto): Promise<ActivoModelo> {
-    return this.prisma.activoModelo.update({
+    const activoModelo = await this.prisma.activoModelo.findUnique({
+      where: { id },
+    });
+
+    if (!activoModelo) {
+      throw new BadRequestException('Activo Modelo no encontrado');
+    }
+
+    const updatedActivoModelo = await this.prisma.activoModelo.update({
       where: { id },
       data,
     });
+
+    this.notificationsService.sendNotification('activo-modelo-changed', updatedActivoModelo);
+
+    return updatedActivoModelo;
   }
 
   async deleteActivoModelo(id: number): Promise<ActivoModelo> {
@@ -99,6 +125,7 @@ export class ActivoModeloService {
       await this.prisma.activoUnidad.deleteMany({
         where: { fkActivoModelo: id },
       });
+      this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
 
       // Delete the activoModelo
       return this.prisma.activoModelo.delete({

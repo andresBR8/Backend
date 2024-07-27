@@ -33,7 +33,7 @@ export class ActivoUnidadController {
   async findAll(@Res() res: Response) {
     const activosUnidad = await this.activoUnidadService.getActivosUnidad();
     return res.status(HttpStatus.OK).json({
-      message: 'Activos Unidad retrieved successfully',
+      message: 'Activos Unidad:',
       data: activosUnidad,
     });
   }
