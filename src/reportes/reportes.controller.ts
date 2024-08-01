@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res, HttpStatus, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, Res, HttpStatus, BadRequestException, Param } from '@nestjs/common';
 import { ReportService } from './reportes.service';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -7,6 +7,26 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 @Controller('reportes')
 export class ReportController {
   constructor(private readonly reportService: ReportService) {}
+  
+  // Endpoint para obtener el seguimiento completo de una unidad de activo por ID
+  @Get('seguimiento-activo/:id')
+  @ApiOperation({ summary: 'Obtener el seguimiento completo de una unidad de activo' })
+  @ApiResponse({ status: 200, description: 'Seguimiento completo de la unidad de activo' })
+  async getSeguimientoActivo(@Param('id') id: number, @Res() res: Response) {
+    try {
+      if (isNaN(id)) {
+        throw new BadRequestException('El id de la unidad de activo no es válido');
+      }
+
+      const seguimiento = await this.reportService.getSeguimientoActivo(id);
+      return res.status(HttpStatus.OK).json({
+        message: 'Seguimiento de activo obtenido exitosamente',
+        data: seguimiento,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al obtener el seguimiento del activo: ${error.message}`);
+    }
+  }
 
   @Get('activos-por-modelo')
   @ApiOperation({ summary: 'Obtener activos por modelo' })

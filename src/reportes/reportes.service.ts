@@ -9,6 +9,65 @@ import * as fs from 'fs';
 export class ReportService {
   constructor(private prisma: PrismaService) {}
 
+  // Método para obtener el seguimiento completo de una unidad de activo
+  async getSeguimientoActivo(id: number): Promise<any> {
+    try {
+      const activo = await this.prisma.activoUnidad.findUnique({
+        where: { id },
+        include: {
+          activoModelo: {
+            include: {
+              partida: true,
+            },
+          },
+          asignacionHistorial: {
+            include: {
+              personal: true,
+              usuario: true,
+            },
+          },
+          asignacionActivos: {
+            include: {
+              asignacion: {
+                include: {
+                  personal: true,
+                  usuario: true,
+                },
+              },
+            },
+          },
+          depreciaciones: true,
+          bajas: true,
+          mantenimientos: true,
+          reasignaciones: {
+            include: {
+              personalAnterior: true,
+              personalNuevo: true,
+              usuarioAnterior: true,
+              usuarioNuevo: true,
+            },
+          },
+        },
+      });
+
+      if (!activo) {
+        throw new BadRequestException('No se encontró el activo especificado');
+      }
+
+      return {
+        activoUnidad: activo,
+        historialAsignaciones: activo.asignacionHistorial,
+        asignaciones: activo.asignacionActivos,
+        depreciaciones: activo.depreciaciones,
+        bajas: activo.bajas,
+        mantenimientos: activo.mantenimientos,
+        reasignaciones: activo.reasignaciones,
+      };
+    } catch (error) {
+      throw new BadRequestException(`Error al obtener el seguimiento del activo: ${error.message}`);
+    }
+  }
+  
   // Reporte de activos por modelo
   async getActivosPorModelo(fkActivoModelo: number): Promise<ActivoUnidad[]> {
     try {

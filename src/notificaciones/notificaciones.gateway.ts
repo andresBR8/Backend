@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
-    origin: 'http://localhost:5173', // Ajusta esto a la URL de tu frontend
+    origin: 'https://activosfijosemi.up.railway.app', // Replace this with your production URL
     methods: ['GET', 'POST'],
     credentials: true,
   }
