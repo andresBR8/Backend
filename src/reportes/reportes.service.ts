@@ -20,12 +20,6 @@ export class ReportService {
               partida: true,
             },
           },
-          asignacionHistorial: {
-            include: {
-              personal: true,
-              usuario: true,
-            },
-          },
           asignacionActivos: {
             include: {
               asignacion: {
@@ -56,18 +50,12 @@ export class ReportService {
 
       return {
         activoUnidad: activo,
-        historialAsignaciones: activo.asignacionHistorial,
-        asignaciones: activo.asignacionActivos,
-        depreciaciones: activo.depreciaciones,
-        bajas: activo.bajas,
-        mantenimientos: activo.mantenimientos,
-        reasignaciones: activo.reasignaciones,
       };
     } catch (error) {
       throw new BadRequestException(`Error al obtener el seguimiento del activo: ${error.message}`);
     }
   }
-  
+
   // Reporte de activos por modelo
   async getActivosPorModelo(fkActivoModelo: number): Promise<ActivoUnidad[]> {
     try {
