@@ -12,7 +12,7 @@ export class ActivoModeloController {
 
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  @ApiOperation({ summary: 'Crear uno o varios nuevos modelos de activos con unidades' })
+  @ApiOperation({ summary: 'Crear uno o varios nuevos modelos de activos' })
   @ApiResponse({ status: 201, description: 'Los modelos de activos han sido creados exitosamente.' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
   async create(@Body() createActivoModeloDtos: CreateActivoModeloDto[], @Res() res: Response) {
