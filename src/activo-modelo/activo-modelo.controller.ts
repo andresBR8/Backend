@@ -11,7 +11,10 @@ export class ActivoModeloController {
   constructor(private readonly activoModeloService: ActivoModeloService) {}
 
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true }))
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, exceptionFactory: (errors) => {
+    const messages = errors.map(err => `${err.property} - ${Object.values(err.constraints).join(', ')}`);
+    return new BadRequestException(messages);
+  }}))
   @ApiOperation({ summary: 'Crear uno o varios nuevos modelos de activos' })
   @ApiResponse({ status: 201, description: 'Los modelos de activos han sido creados exitosamente.' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
@@ -56,7 +59,10 @@ export class ActivoModeloController {
   }
 
   @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true }))
+  @UsePipes(new ValidationPipe({ whitelist: true, exceptionFactory: (errors) => {
+    const messages = errors.map(err => `${err.property} - ${Object.values(err.constraints).join(', ')}`);
+    return new BadRequestException(messages);
+  }}))
   @ApiOperation({ summary: 'Actualizar un modelo de activo' })
   @ApiResponse({ status: 200, description: 'El modelo de activo ha sido actualizado exitosamente' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
