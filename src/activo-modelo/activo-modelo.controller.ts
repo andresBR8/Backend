@@ -11,18 +11,19 @@ export class ActivoModeloController {
   constructor(private readonly activoModeloService: ActivoModeloService) {}
 
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, exceptionFactory: (errors) => {
-    const messages = errors.map(err => `${err.property} - ${Object.values(err.constraints).join(', ')}`);
-    return new BadRequestException(messages);
-  }}))
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   @ApiOperation({ summary: 'Crear uno o varios nuevos modelos de activos' })
   @ApiResponse({ status: 201, description: 'Los modelos de activos han sido creados exitosamente.' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
   async create(@Body() createActivoModeloDtos: CreateActivoModeloDto[], @Res() res: Response) {
     try {
-      const activosModelos = await Promise.all(
-        createActivoModeloDtos.map(dto => this.activoModeloService.createActivoModelo(dto))
-      );
+      let activosModelos;
+      if (Array.isArray(createActivoModeloDtos)) {
+        activosModelos = await this.activoModeloService.createActivosModelos(createActivoModeloDtos);
+      } else {
+        activosModelos = [await this.activoModeloService.createActivoModelo(createActivoModeloDtos)];
+      }
+
       return res.status(HttpStatus.CREATED).json({
         message: 'Modelos de activos creados exitosamente',
         data: activosModelos,

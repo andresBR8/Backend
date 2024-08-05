@@ -11,7 +11,17 @@ export class ActivoModeloService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService
   ) {}
-  
+
+  async createActivosModelos(createActivoModeloDtos: CreateActivoModeloDto[]): Promise<ActivoModelo[]> {
+    const activosModelos: ActivoModelo[] = [];
+    
+    for (const createActivoModeloDto of createActivoModeloDtos) {
+      const activoModelo = await this.createActivoModelo(createActivoModeloDto);
+      activosModelos.push(activoModelo);
+    }
+
+    return activosModelos;
+  }
 
   async createActivoModelo(createActivoModeloDto: CreateActivoModeloDto): Promise<ActivoModelo> {
     const {
@@ -63,6 +73,7 @@ export class ActivoModeloService {
         },
       });
     }
+    
     this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
 
     return activoModelo;
