@@ -1,4 +1,3 @@
-// src/reasignacion/reasignacion.controller.ts
 import { Controller, Get, Post, Body, Param, Put, Delete, HttpCode, HttpStatus } from '@nestjs/common';
 import { ReasignacionService } from './reasignacion.service';
 import { CreateReasignacionDto } from './dto/create-reasignacion.dto';
@@ -25,6 +24,12 @@ export class ReasignacionController {
   async findOne(@Param('id') id: string) {
     const reasignacion = await this.reasignacionService.getReasignacionById(+id);
     return { message: `Reasignación con ID ${id} obtenida exitosamente.`, data: reasignacion };
+  }
+
+  @Get('ultima-asignacion/:fkActivoUnidad')
+  async findUltimaAsignacion(@Param('fkActivoUnidad') fkActivoUnidad: number) {
+    const ultimaAsignacion = await this.reasignacionService.getUltimaAsignacion(fkActivoUnidad);
+    return { message: 'Última asignación obtenida exitosamente.', data: ultimaAsignacion };
   }
 
   @Put(':id')

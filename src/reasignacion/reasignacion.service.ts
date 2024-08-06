@@ -1,4 +1,3 @@
-// src/reasignacion/reasignacion.service.ts
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateReasignacionDto } from './dto/create-reasignacion.dto';
@@ -85,6 +84,23 @@ export class ReasignacionService {
         },
       });
     });
+  }
+
+  async getUltimaAsignacion(fkActivoUnidad: number): Promise<any> {
+    const ultimaAsignacion = await this.prisma.asignacionHistorial.findFirst({
+      where: { fkActivoUnidad },
+      orderBy: { fechaAsignacion: 'desc' },
+      include: {
+        usuario: true,
+        personal: true,
+      },
+    });
+
+    if (!ultimaAsignacion) {
+      throw new NotFoundException('No se encontró una asignación anterior para este activo.');
+    }
+
+    return ultimaAsignacion;
   }
 
   async getReasignaciones(): Promise<any[]> {

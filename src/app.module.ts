@@ -51,7 +51,8 @@ import { ReportesModule } from './reportes/reportes.module';
     NotificationsModule,
     ReasignacionModule,
     BackupModule,
-    ReportesModule
+    ReportesModule,
+    
   ],
   controllers: [HelloController, UploadController],
   providers: [
