@@ -3,6 +3,15 @@ import { PrismaService } from '../prisma.service';
 import { CreateReasignacionDto } from './dto/create-reasignacion.dto';
 import { UpdateReasignacionDto } from './dto/update-reasignacion.dto';
 
+interface UltimaAsignacion {
+  tipo: string;
+  id: number;
+  fecha: Date;
+  fkUsuario: string;
+  fkPersonal: number;
+  detalle: string;
+}
+
 @Injectable()
 export class ReasignacionService {
   constructor(private prisma: PrismaService) {}
@@ -28,14 +37,14 @@ export class ReasignacionService {
       if (!asignacionActual) {
         throw new NotFoundException('Asignación anterior no encontrada.');
       }
-
+      /*
       await prisma.asignacionActivoUnidad.deleteMany({
         where: {
           fkAsignacion: asignacionActual.id,
           fkActivoUnidad,
         },
       });
-
+      */
       await prisma.activoUnidad.update({
         where: { id: fkActivoUnidad },
         data: { asignado: false },
@@ -87,20 +96,51 @@ export class ReasignacionService {
   }
 
   async getUltimaAsignacion(fkActivoUnidad: number): Promise<any> {
-    const ultimaAsignacion = await this.prisma.asignacionHistorial.findFirst({
-      where: { fkActivoUnidad },
-      orderBy: { fechaAsignacion: 'desc' },
-      include: {
-        usuario: true,
-        personal: true,
-      },
-    });
+    const [ultimaAsignacion]: UltimaAsignacion[] = await this.prisma.$queryRaw<UltimaAsignacion[]>`
+      SELECT * FROM (
+        SELECT 
+          'asignacion' as tipo,
+          a.id,
+          a."fechaAsignacion" as fecha,
+          a."fkUsuario",
+          a."fkPersonal",
+          a.detalle
+        FROM "asignacion_historial" a
+        WHERE a."fkActivoUnidad" = ${fkActivoUnidad}
+        
+        UNION ALL
+        
+        SELECT 
+          'reasignacion' as tipo,
+          r.id,
+          r."fechaReasignacion" as fecha,
+          r."fkUsuarioNuevo" as "fkUsuario",
+          r."fkPersonalNuevo" as "fkPersonal",
+          r.detalle
+        FROM "reasignaciones" r
+        WHERE r."fkActivoUnidad" = ${fkActivoUnidad}
+      ) as asignaciones
+      ORDER BY fecha DESC
+      LIMIT 1
+    `;
 
     if (!ultimaAsignacion) {
       throw new NotFoundException('No se encontró una asignación anterior para este activo.');
     }
 
-    return ultimaAsignacion;
+    const usuario = await this.prisma.user.findUnique({
+      where: { id: ultimaAsignacion.fkUsuario },
+    });
+
+    const personal = await this.prisma.personal.findUnique({
+      where: { id: ultimaAsignacion.fkPersonal },
+    });
+
+    return {
+      ...ultimaAsignacion,
+      usuario,
+      personal,
+    };
   }
 
   async getReasignaciones(): Promise<any[]> {
