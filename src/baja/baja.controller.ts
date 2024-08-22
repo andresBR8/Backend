@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Res, HttpStatus, BadRequestException, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Res, HttpStatus, UsePipes, ValidationPipe, Req, BadRequestException, NotFoundException } from '@nestjs/common';
 import { BajaService } from './baja.service';
 import { CreateBajaDto } from './dto/create-baja.dto';
 import { UpdateBajaDto } from './dto/update-baja.dto';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @ApiTags('baja')
@@ -15,15 +15,40 @@ export class BajaController {
   @ApiOperation({ summary: 'Crear una nueva baja' })
   @ApiResponse({ status: 201, description: 'La baja ha sido creada exitosamente.' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async create(@Body() createBajaDto: CreateBajaDto, @Res() res: Response) {
+  async create(@Body() createBajaDto: CreateBajaDto, @Req() req: Request, @Res() res: Response) {
     try {
-      const baja = await this.bajaService.createBaja(createBajaDto);
+      const userId = (req as any).user?.id; // Modifica esto según cómo obtienes el `userId`
+      if (!userId) {
+        throw new BadRequestException('User ID no encontrado');
+      }
+      const baja = await this.bajaService.createBaja(createBajaDto, userId);
       return res.status(HttpStatus.CREATED).json({
         message: 'Baja creada exitosamente',
         data: baja,
       });
     } catch (error) {
       throw new BadRequestException(`Error al crear la baja: ${error.message}`);
+    }
+  }
+
+  @Patch(':id/aprobar')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  @ApiOperation({ summary: 'Aprobar o rechazar una baja' })
+  @ApiResponse({ status: 200, description: 'La baja ha sido aprobada o rechazada exitosamente' })
+  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
+  async aprobarBaja(
+    @Param('id') id: string,
+    @Body() body: { administradorId: string; aprobar: boolean },
+    @Res() res: Response
+  ) {
+    try {
+      const baja = await this.bajaService.aprobarBaja(+id, body.administradorId, body.aprobar);
+      return res.status(HttpStatus.OK).json({
+        message: `Baja ${body.aprobar ? 'aprobada' : 'rechazada'} exitosamente`,
+        data: baja,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al aprobar/rechazar la baja: ${error.message}`);
     }
   }
 
@@ -57,7 +82,6 @@ export class BajaController {
   @UsePipes(new ValidationPipe({ whitelist: true }))
   @ApiOperation({ summary: 'Actualizar una baja' })
   @ApiResponse({ status: 200, description: 'La baja ha sido actualizada exitosamente' })
-  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
   async update(@Param('id') id: string, @Body() updateBajaDto: UpdateBajaDto, @Res() res: Response) {
     try {
       const baja = await this.bajaService.updateBaja(+id, updateBajaDto);
@@ -66,7 +90,9 @@ export class BajaController {
         data: baja,
       });
     } catch (error) {
-      throw new BadRequestException(`Error al actualizar la baja: ${error.message}`);
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        message: `Error al actualizar la baja: ${error.message}`,
+      });
     }
   }
 
@@ -82,23 +108,9 @@ export class BajaController {
         data: baja,
       });
     } catch (error) {
-      throw new NotFoundException('Error al eliminar la baja');
-    }
-  }
-
-  @Patch(':id/restaurar')
-  @ApiOperation({ summary: 'Restaurar un activo dado de baja' })
-  @ApiResponse({ status: 200, description: 'El activo ha sido restaurado exitosamente' })
-  @ApiResponse({ status: 404, description: 'Baja no encontrada' })
-  async restaurar(@Param('id') id: string, @Res() res: Response) {
-    try {
-      const baja = await this.bajaService.restaurarBaja(+id);
-      return res.status(HttpStatus.OK).json({
-        message: 'Activo restaurado exitosamente',
-        data: baja,
+      return res.status(HttpStatus.NOT_FOUND).json({
+        message: `Error al eliminar la baja: ${error.message}`,
       });
-    } catch (error) {
-      throw new NotFoundException(`Error al restaurar la baja: ${error.message}`);
     }
   }
 }

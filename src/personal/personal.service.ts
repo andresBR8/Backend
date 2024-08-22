@@ -26,9 +26,31 @@ export class PersonalService {
 
   async findAll(): Promise<Personal[]> {
     return this.prisma.personal.findMany({
-      include: { cargo: true, unidad: true },
+      include: {
+        cargo: true,
+        unidad: true,
+        asignaciones: {
+          include: {
+            asignacionActivos: {
+              include: {
+                activoUnidad: {
+                  include: {
+                    activoModelo: true,
+                    asignacionHistorial: true,
+                    bajas: true,
+                    depreciaciones: true,
+                    mantenimientos: true,
+                    reasignaciones: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
   }
+  
 
   async findOne(id: number): Promise<Personal | null> {
     const personal = await this.prisma.personal.findUnique({

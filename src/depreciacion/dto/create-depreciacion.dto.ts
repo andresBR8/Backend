@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsNotEmpty, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, IsDateString, IsEnum } from 'class-validator';
+import { MetodoDepreciacion } from '@prisma/client';
 
 export class CreateDepreciacionDto {
   @ApiProperty({ example: 1 })
@@ -16,4 +17,18 @@ export class CreateDepreciacionDto {
   @IsNotEmpty()
   @IsNumber()
   valor: number;
+
+  @ApiProperty({ example: 'ANUAL' })
+  @IsNotEmpty()
+  @IsString()
+  periodo: string;
+
+  @ApiProperty({ example: 'LINEA_RECTA' })
+  @IsEnum(MetodoDepreciacion)
+  @IsNotEmpty()
+  metodo: MetodoDepreciacion;
+
+  @ApiProperty({ example: 'Reevaluación' })
+  @IsString()
+  causaEspecial?: string;
 }

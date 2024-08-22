@@ -15,6 +15,7 @@ export class ActivoModeloService {
   async createActivosModelos(createActivoModeloDtos: CreateActivoModeloDto[]): Promise<ActivoModelo[]> {
     const activosModelos: ActivoModelo[] = [];
     
+    // Recorremos el array de DTOs y procesamos cada uno
     for (const createActivoModeloDto of createActivoModeloDtos) {
       const activoModelo = await this.createActivoModelo(createActivoModeloDto);
       activosModelos.push(activoModelo);
@@ -39,6 +40,7 @@ export class ActivoModeloService {
       cantidad
     } = createActivoModeloDto;
 
+    // Creamos el objeto de datos que se insertará en la base de datos
     const data: Prisma.ActivoModeloCreateInput = {
       nombre,
       descripcion,
@@ -58,22 +60,28 @@ export class ActivoModeloService {
       cantidad,
     };
 
+    // Creación del modelo de activo en la base de datos
     const activoModelo = await this.prisma.activoModelo.create({
       data,
     });
 
+    // Creamos las unidades correspondientes según la cantidad
+    const unidades = [];
     for (let i = 1; i <= cantidad; i++) {
       const codigoUnidad = `${codigoNuevo}-${i}`;
-
-      await this.prisma.activoUnidad.create({
-        data: {
-          fkActivoModelo: activoModelo.id,
-          codigo: codigoUnidad,
-          asignado: false,
-        },
+      unidades.push({
+        fkActivoModelo: activoModelo.id,
+        codigo: codigoUnidad,
+        asignado: false,
       });
     }
+
+    // Inserción masiva de unidades en la base de datos
+    await this.prisma.activoUnidad.createMany({
+      data: unidades,
+    });
     
+    // Notificación de que un modelo de activo ha cambiado
     this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
 
     return activoModelo;

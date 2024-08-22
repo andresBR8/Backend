@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsNotEmpty, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, IsDateString, IsEnum, IsOptional } from 'class-validator';
+import { BajaEstado } from '@prisma/client';
 
 export class CreateBajaDto {
   @ApiProperty({ example: 1 })
@@ -16,4 +17,9 @@ export class CreateBajaDto {
   @IsNotEmpty()
   @IsString()
   motivo: string;
+
+  @ApiProperty({ example: 'PENDIENTE', enum: BajaEstado, required: false })
+  @IsOptional()
+  @IsEnum(BajaEstado)
+  estado?: BajaEstado;
 }

@@ -1,5 +1,5 @@
 // src/reasignacion/dto/create-reasignacion.dto.ts
-import { IsNotEmpty, IsInt, IsString } from 'class-validator';
+import { IsNotEmpty, IsInt, IsString, IsDateString } from 'class-validator';
 
 export class CreateReasignacionDto {
   @IsNotEmpty()
@@ -25,4 +25,8 @@ export class CreateReasignacionDto {
   @IsNotEmpty()
   @IsString()
   detalle: string;
+  
+  @IsNotEmpty()
+  @IsDateString()
+  fechaReasignacion: string;
 }

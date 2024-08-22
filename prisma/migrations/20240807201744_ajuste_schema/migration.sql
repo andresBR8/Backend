@@ -65,7 +65,7 @@ CREATE TABLE "activo_modelos" (
     "codigoNuevo" TEXT NOT NULL,
     "ordenCompra" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" TEXT NOT NULL,
     "updatedBy" TEXT,
     "cantidad" INTEGER NOT NULL,
@@ -145,6 +145,20 @@ CREATE TABLE "depreciaciones" (
     CONSTRAINT "depreciaciones_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "reasignaciones" (
+    "id" SERIAL NOT NULL,
+    "fkActivoUnidad" INTEGER NOT NULL,
+    "fkUsuarioAnterior" TEXT NOT NULL,
+    "fkUsuarioNuevo" TEXT NOT NULL,
+    "fkPersonalAnterior" INTEGER NOT NULL,
+    "fkPersonalNuevo" INTEGER NOT NULL,
+    "fechaReasignacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "detalle" TEXT NOT NULL,
+
+    CONSTRAINT "reasignaciones_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
 
@@ -182,25 +196,25 @@ ALTER TABLE "activo_modelos" ADD CONSTRAINT "activo_modelos_fkPartida_fkey" FORE
 ALTER TABLE "activo_unidades" ADD CONSTRAINT "activo_unidades_fkActivoModelo_fkey" FOREIGN KEY ("fkActivoModelo") REFERENCES "activo_modelos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "asignaciones" ADD CONSTRAINT "asignaciones_fkUsuario_fkey" FOREIGN KEY ("fkUsuario") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "asignaciones" ADD CONSTRAINT "asignaciones_fkPersonal_fkey" FOREIGN KEY ("fkPersonal") REFERENCES "personal"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "asignaciones" ADD CONSTRAINT "asignaciones_fkPersonal_fkey" FOREIGN KEY ("fkPersonal") REFERENCES "personal"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "asignaciones" ADD CONSTRAINT "asignaciones_fkUsuario_fkey" FOREIGN KEY ("fkUsuario") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "asignacion_historial" ADD CONSTRAINT "asignacion_historial_fkActivoUnidad_fkey" FOREIGN KEY ("fkActivoUnidad") REFERENCES "activo_unidades"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "asignacion_historial" ADD CONSTRAINT "asignacion_historial_fkUsuario_fkey" FOREIGN KEY ("fkUsuario") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "asignacion_historial" ADD CONSTRAINT "asignacion_historial_fkPersonal_fkey" FOREIGN KEY ("fkPersonal") REFERENCES "personal"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "asignacion_activo_unidades" ADD CONSTRAINT "asignacion_activo_unidades_fkAsignacion_fkey" FOREIGN KEY ("fkAsignacion") REFERENCES "asignaciones"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "asignacion_historial" ADD CONSTRAINT "asignacion_historial_fkUsuario_fkey" FOREIGN KEY ("fkUsuario") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "asignacion_activo_unidades" ADD CONSTRAINT "asignacion_activo_unidades_fkActivoUnidad_fkey" FOREIGN KEY ("fkActivoUnidad") REFERENCES "activo_unidades"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "asignacion_activo_unidades" ADD CONSTRAINT "asignacion_activo_unidades_fkAsignacion_fkey" FOREIGN KEY ("fkAsignacion") REFERENCES "asignaciones"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "mantenimientos" ADD CONSTRAINT "mantenimientos_fkActivoUnidad_fkey" FOREIGN KEY ("fkActivoUnidad") REFERENCES "activo_unidades"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -210,3 +224,18 @@ ALTER TABLE "bajas" ADD CONSTRAINT "bajas_fkActivoUnidad_fkey" FOREIGN KEY ("fkA
 
 -- AddForeignKey
 ALTER TABLE "depreciaciones" ADD CONSTRAINT "depreciaciones_fkActivoUnidad_fkey" FOREIGN KEY ("fkActivoUnidad") REFERENCES "activo_unidades"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "reasignaciones" ADD CONSTRAINT "reasignaciones_fkActivoUnidad_fkey" FOREIGN KEY ("fkActivoUnidad") REFERENCES "activo_unidades"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "reasignaciones" ADD CONSTRAINT "reasignaciones_fkPersonalAnterior_fkey" FOREIGN KEY ("fkPersonalAnterior") REFERENCES "personal"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "reasignaciones" ADD CONSTRAINT "reasignaciones_fkPersonalNuevo_fkey" FOREIGN KEY ("fkPersonalNuevo") REFERENCES "personal"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "reasignaciones" ADD CONSTRAINT "reasignaciones_fkUsuarioAnterior_fkey" FOREIGN KEY ("fkUsuarioAnterior") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "reasignaciones" ADD CONSTRAINT "reasignaciones_fkUsuarioNuevo_fkey" FOREIGN KEY ("fkUsuarioNuevo") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma.service';
 import { CreateReasignacionDto } from './dto/create-reasignacion.dto';
 import { UpdateReasignacionDto } from './dto/update-reasignacion.dto';
+import { NotificationsService } from 'src/notificaciones/notificaciones.service';
 
 interface UltimaAsignacion {
   tipo: string;
@@ -14,134 +15,111 @@ interface UltimaAsignacion {
 
 @Injectable()
 export class ReasignacionService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async reasignarActivo(createReasignacionDto: CreateReasignacionDto): Promise<void> {
-    const { fkActivoUnidad, fkUsuarioAnterior, fkUsuarioNuevo, fkPersonalAnterior, fkPersonalNuevo, detalle } = createReasignacionDto;
+    const { fkActivoUnidad, fkUsuarioAnterior, fkUsuarioNuevo, fkPersonalAnterior, fkPersonalNuevo, detalle, fechaReasignacion } = createReasignacionDto;
 
     return this.prisma.$transaction(async (prisma) => {
-      const asignacionActual = await prisma.asignacion.findFirst({
-        where: {
-          fkUsuario: fkUsuarioAnterior,
-          asignacionActivos: {
-            some: {
-              fkActivoUnidad,
-            },
-          },
-        },
-        include: {
-          asignacionActivos: true,
-        },
-      });
-
-      if (!asignacionActual) {
-        throw new NotFoundException('Asignación anterior no encontrada.');
-      }
-      /*
-      await prisma.asignacionActivoUnidad.deleteMany({
-        where: {
-          fkAsignacion: asignacionActual.id,
-          fkActivoUnidad,
-        },
-      });
-      */
-      await prisma.activoUnidad.update({
-        where: { id: fkActivoUnidad },
-        data: { asignado: false },
-      });
-
+      // Crear una nueva asignación para el nuevo usuario y personal
       const nuevaAsignacion = await prisma.asignacion.create({
         data: {
           fkUsuario: fkUsuarioNuevo,
           fkPersonal: fkPersonalNuevo,
-          fechaAsignacion: new Date(),
+          fechaAsignacion: new Date(fechaReasignacion),
           detalle,
         },
       });
 
-      await prisma.asignacionActivoUnidad.create({
-        data: {
-          fkAsignacion: nuevaAsignacion.id,
-          fkActivoUnidad,
-        },
-      });
-
+      // Mantener el estado del activo como asignado
       await prisma.activoUnidad.update({
         where: { id: fkActivoUnidad },
         data: { asignado: true },
       });
 
+      // Registrar el cambio en el historial de asignaciones
       await prisma.asignacionHistorial.create({
         data: {
           fkActivoUnidad,
           fkUsuario: fkUsuarioNuevo,
           fkPersonal: fkPersonalNuevo,
-          fechaAsignacion: new Date(),
+          fechaAsignacion: new Date(fechaReasignacion),
           detalle,
         },
       });
 
-      await prisma.reasignacion.create({
+      // Registrar la reasignación
+      const nuevaReasignacion = await prisma.reasignacion.create({
         data: {
           fkActivoUnidad,
           fkUsuarioAnterior,
           fkUsuarioNuevo,
           fkPersonalAnterior,
           fkPersonalNuevo,
-          fechaReasignacion: new Date(),
+          fechaReasignacion: new Date(fechaReasignacion),
           detalle,
         },
       });
+
+      // Obtener detalles del usuario y personal
+      const usuarioAnterior = await prisma.user.findUnique({ where: { id: fkUsuarioAnterior } });
+      const usuarioNuevo = await prisma.user.findUnique({ where: { id: fkUsuarioNuevo } });
+      const personalAnterior = await prisma.personal.findUnique({ where: { id: fkPersonalAnterior } });
+      const personalNuevo = await prisma.personal.findUnique({ where: { id: fkPersonalNuevo } });
+
+      if (!usuarioAnterior || !usuarioNuevo || !personalAnterior || !personalNuevo) {
+        throw new NotFoundException('Información de usuario o personal no encontrada');
+      }
+
+      // Construir el mensaje de notificación
+      const mensajeNotificacion = `Reasignación realizada: Usuario anterior: ${usuarioAnterior.name}, Usuario nuevo: ${usuarioNuevo.name}, Personal anterior: ${personalAnterior.nombre}, Personal nuevo: ${personalNuevo.nombre}`;
+
+      // Enviar notificación en tiempo real
+      this.notificationsService.sendNotification('reasignacion-creada', {
+        reasignacion: nuevaReasignacion,
+        mensaje: mensajeNotificacion,
+      });
     });
   }
-
+  
   async getUltimaAsignacion(fkActivoUnidad: number): Promise<any> {
     const [ultimaAsignacion]: UltimaAsignacion[] = await this.prisma.$queryRaw<UltimaAsignacion[]>`
-      SELECT * FROM (
-        SELECT 
-          'asignacion' as tipo,
-          a.id,
-          a."fechaAsignacion" as fecha,
-          a."fkUsuario",
-          a."fkPersonal",
-          a.detalle
-        FROM "asignacion_historial" a
-        WHERE a."fkActivoUnidad" = ${fkActivoUnidad}
-        
-        UNION ALL
-        
-        SELECT 
-          'reasignacion' as tipo,
-          r.id,
-          r."fechaReasignacion" as fecha,
-          r."fkUsuarioNuevo" as "fkUsuario",
-          r."fkPersonalNuevo" as "fkPersonal",
-          r.detalle
-        FROM "reasignaciones" r
-        WHERE r."fkActivoUnidad" = ${fkActivoUnidad}
-      ) as asignaciones
-      ORDER BY fecha DESC
+      SELECT
+        'asignacion' as tipo,
+        ah.id,
+        ah."fechaAsignacion" as fecha,
+        ah."fkUsuario",
+        ah."fkPersonal",
+        ah.detalle
+      FROM "asignacion_historial" ah
+      WHERE ah."fkActivoUnidad" = ${fkActivoUnidad}
+      ORDER BY ah."fechaAsignacion" DESC
       LIMIT 1
     `;
-
+  
     if (!ultimaAsignacion) {
       throw new NotFoundException('No se encontró una asignación anterior para este activo.');
     }
-
+  
     const usuario = await this.prisma.user.findUnique({
       where: { id: ultimaAsignacion.fkUsuario },
     });
-
+  
     const personal = await this.prisma.personal.findUnique({
       where: { id: ultimaAsignacion.fkPersonal },
     });
-
+  
     return {
       ...ultimaAsignacion,
       usuario,
       personal,
     };
   }
+  
+  
 
   async getReasignaciones(): Promise<any[]> {
     return this.prisma.reasignacion.findMany({

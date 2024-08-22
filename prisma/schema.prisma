@@ -159,19 +159,38 @@ model Baja {
   fkActivoUnidad Int
   fecha          DateTime
   motivo         String
+  estado         BajaEstado   @default(PENDIENTE)
+  creadoPor      String
   activoUnidad   ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
-
-  @@map("bajas")
 }
+
+enum BajaEstado {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
 
 model Depreciacion {
   id             Int          @id @default(autoincrement())
   fkActivoUnidad Int
   fecha          DateTime
   valor          Float
-  activoUnidad   ActivoUnidad @relation(fields: [fkActivoUnidad], references: [id])
+  valorNeto      Float
+  periodo        String        // Ej. "ANUAL", "TRIMESTRAL", "MENSUAL"
+  metodo         MetodoDepreciacion
+  causaEspecial  String?       // En caso de ser una depreciación fuera de lo normal
+  activoUnidad   ActivoUnidad  @relation(fields: [fkActivoUnidad], references: [id])
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@map("depreciaciones")
+}
+
+enum MetodoDepreciacion {
+  LINEA_RECTA
+  SALDOS_DECRECIENTES
 }
 
 model Reasignacion {

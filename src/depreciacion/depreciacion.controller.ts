@@ -2,7 +2,6 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Res, HttpStatus, Bad
 import { DepreciacionService } from './depreciacion.service';
 import { CreateDepreciacionDto } from './dto/create-depreciacion.dto';
 import { UpdateDepreciacionDto } from './dto/update-depreciacion.dto';
-import { DepreciarPorModeloDto } from './dto/depreciar-por-modelo.dto'
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -13,7 +12,7 @@ export class DepreciacionController {
 
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  @ApiOperation({ summary: 'Crear una nueva depreciación' })
+  @ApiOperation({ summary: 'Crear una nueva depreciación específica' })
   @ApiResponse({ status: 201, description: 'La depreciación ha sido creada exitosamente.' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
   async create(@Body() createDepreciacionDto: CreateDepreciacionDto, @Res() res: Response) {
@@ -35,6 +34,17 @@ export class DepreciacionController {
     const depreciaciones = await this.depreciacionService.getDepreciaciones();
     return res.status(HttpStatus.OK).json({
       message: 'Depreciaciones obtenidas exitosamente',
+      data: depreciaciones,
+    });
+  }
+
+  @Get('ultimo-mes')
+  @ApiOperation({ summary: 'Obtener las depreciaciones del último mes' })
+  @ApiResponse({ status: 200, description: 'Depreciaciones del último mes' })
+  async findUltimoMes(@Res() res: Response) {
+    const depreciaciones = await this.depreciacionService.getDepreciacionesUltimoMes();
+    return res.status(HttpStatus.OK).json({
+      message: 'Depreciaciones del último mes obtenidas exitosamente',
       data: depreciaciones,
     });
   }
@@ -87,32 +97,15 @@ export class DepreciacionController {
     }
   }
 
-  @Post('depreciar-por-modelo')
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  @ApiOperation({ summary: 'Depreciar todas las unidades de un modelo de activo' })
-  @ApiResponse({ status: 201, description: 'Las unidades han sido depreciadas exitosamente' })
-  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async depreciarPorModelo(@Body() depreciarPorModeloDto: DepreciarPorModeloDto, @Res() res: Response) {
-    try {
-      const depreciaciones = await this.depreciacionService.depreciarPorModelo(depreciarPorModeloDto.fkActivoModelo, depreciarPorModeloDto.fecha, depreciarPorModeloDto.valor);
-      return res.status(HttpStatus.CREATED).json({
-        message: 'Unidades depreciadas exitosamente',
-        data: depreciaciones,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al depreciar por modelo: ${error.message}`);
-    }
-  }
-
-  @Post('depreciar-todos')
-  @ApiOperation({ summary: 'Depreciar todos los activos automáticamente' })
+  @Post('depreciar-todos-mensual')
+  @ApiOperation({ summary: 'Depreciar todos los activos mensualmente (opcional)' })
   @ApiResponse({ status: 201, description: 'Todos los activos han sido depreciados exitosamente' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async depreciarTodos(@Res() res: Response) {
+  async depreciarTodosMensual(@Res() res: Response) {
     try {
-      await this.depreciacionService.depreciarTodosActivos();
+      await this.depreciacionService.depreciarTodosActivosMensualmente();
       return res.status(HttpStatus.CREATED).json({
-        message: 'Todos los activos han sido depreciados exitosamente',
+        message: 'Todos los activos han sido depreciados mensualmente.',
       });
     } catch (error) {
       throw new BadRequestException(`Error al depreciar todos los activos: ${error.message}`);
