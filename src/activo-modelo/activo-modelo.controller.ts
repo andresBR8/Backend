@@ -1,8 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Res, HttpStatus, BadRequestException, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, HttpStatus, BadRequestException, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ActivoModeloService } from './activo-modelo.service';
 import { CreateActivoModeloDto } from './dto/create-activo-modelo.dto';
 import { UpdateActivoModeloDto } from './dto/update-activo-modelo.dto';
-import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @ApiTags('activo-modelo')
@@ -15,19 +14,18 @@ export class ActivoModeloController {
   @ApiOperation({ summary: 'Crear uno o varios nuevos modelos de activos' })
   @ApiResponse({ status: 201, description: 'Los modelos de activos han sido creados exitosamente.' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async create(@Body() createActivoModeloDtos: CreateActivoModeloDto[], @Res() res: Response) {
+  async create(@Body() createActivoModeloDtos: CreateActivoModeloDto[]) {
     try {
-      let activosModelos;
       if (Array.isArray(createActivoModeloDtos)) {
-        activosModelos = await this.activoModeloService.createActivosModelos(createActivoModeloDtos);
+        await this.activoModeloService.createActivosModelos(createActivoModeloDtos);
       } else {
-        activosModelos = [await this.activoModeloService.createActivoModelo(createActivoModeloDtos)];
+        await this.activoModeloService.createActivoModelo(createActivoModeloDtos);
       }
 
-      return res.status(HttpStatus.CREATED).json({
+      return {
+        statusCode: HttpStatus.CREATED,
         message: 'Modelos de activos creados exitosamente',
-        data: activosModelos,
-      });
+      };
     } catch (error) {
       throw new BadRequestException(`Error al crear los modelos de activos: ${error.message}`);
     }
@@ -36,44 +34,51 @@ export class ActivoModeloController {
   @Get()
   @ApiOperation({ summary: 'Obtener todos los modelos de activos' })
   @ApiResponse({ status: 200, description: 'Lista de todos los modelos de activos' })
-  async findAll(@Res() res: Response) {
+  async findAll() {
     const activosModelos = await this.activoModeloService.getActivosModelos();
-    return res.status(HttpStatus.OK).json({
+    return {
+      statusCode: HttpStatus.OK,
       message: 'Modelos de activos obtenidos exitosamente',
       data: activosModelos,
-    });
+    };
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un modelo de activo por ID' })
   @ApiResponse({ status: 200, description: 'El modelo de activo' })
   @ApiResponse({ status: 404, description: 'Modelo de activo no encontrado' })
-  async findOne(@Param('id') id: string, @Res() res: Response) {
+  async findOne(@Param('id') id: string) {
     const activoModelo = await this.activoModeloService.getActivoModeloById(+id);
     if (!activoModelo) {
       throw new NotFoundException('Modelo de activo no encontrado');
     }
-    return res.status(HttpStatus.OK).json({
+    return {
+      statusCode: HttpStatus.OK,
       message: 'Modelo de activo obtenido exitosamente',
       data: activoModelo,
-    });
+    };
   }
 
   @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true, exceptionFactory: (errors) => {
-    const messages = errors.map(err => `${err.property} - ${Object.values(err.constraints).join(', ')}`);
-    return new BadRequestException(messages);
-  }}))
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: true,
+      exceptionFactory: (errors) => {
+        const messages = errors.map((err) => `${err.property} - ${Object.values(err.constraints).join(', ')}`);
+        return new BadRequestException(messages);
+      },
+    }),
+  )
   @ApiOperation({ summary: 'Actualizar un modelo de activo' })
   @ApiResponse({ status: 200, description: 'El modelo de activo ha sido actualizado exitosamente' })
   @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async update(@Param('id') id: string, @Body() updateActivoModeloDto: UpdateActivoModeloDto, @Res() res: Response) {
+  async update(@Param('id') id: string, @Body() updateActivoModeloDto: UpdateActivoModeloDto) {
     try {
-      const activoModelo = await this.activoModeloService.updateActivoModelo(+id, updateActivoModeloDto);
-      return res.status(HttpStatus.OK).json({
+      await this.activoModeloService.updateActivoModelo(+id, updateActivoModeloDto);
+      return {
+        statusCode: HttpStatus.OK,
         message: 'Modelo de activo actualizado exitosamente',
-        data: activoModelo,
-      });
+      };
     } catch (error) {
       throw new BadRequestException(`Error al actualizar el modelo de activo: ${error.message}`);
     }
@@ -83,13 +88,13 @@ export class ActivoModeloController {
   @ApiOperation({ summary: 'Eliminar un modelo de activo' })
   @ApiResponse({ status: 200, description: 'El modelo de activo ha sido eliminado exitosamente' })
   @ApiResponse({ status: 404, description: 'Modelo de activo no encontrado' })
-  async remove(@Param('id') id: string, @Res() res: Response) {
+  async remove(@Param('id') id: string) {
     try {
-      const activoModelo = await this.activoModeloService.deleteActivoModelo(+id);
-      return res.status(HttpStatus.OK).json({
+      await this.activoModeloService.deleteActivoModelo(+id);
+      return {
+        statusCode: HttpStatus.OK,
         message: 'Modelo de activo eliminado exitosamente',
-        data: activoModelo,
-      });
+      };
     } catch (error) {
       throw new BadRequestException(`${error.message}`);
     }

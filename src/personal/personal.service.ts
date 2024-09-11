@@ -1,46 +1,225 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { Personal, Prisma } from '@prisma/client';
-import { CreatePersonalDto } from './dto/create-personal.dto';
-import { UpdatePersonalDto } from './dto/update-personal.dto';
-import { NotificationsService } from '../notificaciones/notificaciones.service';
-
+import { Personal, Cargo, Unidad } from '@prisma/client';
+import * as csvParser from 'csv-parser';
+import { Readable } from 'stream';
 
 @Injectable()
 export class PersonalService {
-  constructor(
-    private prisma: PrismaService,
-    private notificationsService: NotificationsService
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async create(createPersonalDto: CreatePersonalDto): Promise<Personal> {
-    try {
-      const personal = await this.prisma.personal.create({
-        data: createPersonalDto,
-      });
-      return personal;
-    } catch (error) {
-      throw new BadRequestException('Error al crear el personal');
+  // Procesar el archivo CSV para crear, actualizar e inactivar personal
+  async processCSV(file: Express.Multer.File): Promise<any> {
+    const data = await this.parseCSV(file.buffer);
+
+    const resumen = {
+      nuevosPersonales: [] as { nombre: string; ci: string }[],
+      nuevosCargos: new Set<string>(),   // Usamos un Set para evitar duplicados
+      nuevasUnidades: new Set<string>(), // Usamos un Set para evitar duplicados
+      personalInactivo: [] as { nombre: string; ci: string; motivo: string }[],
+      personalActualizado: [] as { nombre: string; ci: string; cambios: string[] }[],
+      personalSinCambios: 0,
+      totalProcesados: 0,
+      advertencias: [] as string[],
+      errores: [] as { fila: any, error: string }[],  // Para capturar errores por fila
+    };
+
+    for (const row of data) {
+      try {
+        const { nombre, ci, cargoNombre, unidadNombre } = row;
+
+        // Validar si faltan datos esenciales
+        if (!nombre || !ci || !cargoNombre || !unidadNombre) {
+          resumen.errores.push({ fila: row, error: 'Datos incompletos en la fila.' });
+          continue; // Pasar a la siguiente fila
+        }
+
+        resumen.totalProcesados += 1;
+
+        // Buscar o crear el cargo
+        let cargo = await this.prisma.cargo.findUnique({ where: { nombre: cargoNombre } });
+        if (!cargo) {
+          cargo = await this.prisma.cargo.create({ data: { nombre: cargoNombre } });
+          resumen.nuevosCargos.add(cargoNombre); // Usamos Set para evitar duplicados
+        }
+
+        // Buscar o crear la unidad
+        let unidad = await this.prisma.unidad.findUnique({ where: { nombre: unidadNombre } });
+        if (!unidad) {
+          unidad = await this.prisma.unidad.create({ data: { nombre: unidadNombre } });
+          resumen.nuevasUnidades.add(unidadNombre); // Usamos Set para evitar duplicados
+        }
+
+        // Buscar el personal por CI
+        const personalExistente = await this.prisma.personal.findUnique({ where: { ci } });
+
+        if (personalExistente) {
+          const cambios = [];
+
+          // Verificar si el cargo o la unidad han cambiado
+          if (personalExistente.fkCargo !== cargo.id) {
+            const cargoAnterior = await this.prisma.cargo.findUnique({ where: { id: personalExistente.fkCargo } });
+            cambios.push(`Cambio de cargo: ${cargoAnterior?.nombre} -> ${cargo.nombre}`);
+          }
+          if (personalExistente.fkUnidad !== unidad.id) {
+            const unidadAnterior = await this.prisma.unidad.findUnique({ where: { id: personalExistente.fkUnidad } });
+            cambios.push(`Cambio de unidad: ${unidadAnterior?.nombre} -> ${unidad.nombre}`);
+          }
+
+          if (cambios.length > 0) {
+            // Guardar el historial de cambios
+            await this.prisma.historialCargoUnidad.create({
+              data: {
+                fkPersonal: personalExistente.id,
+                fkCargo: personalExistente.fkCargo,   // Cargo anterior
+                fkUnidad: personalExistente.fkUnidad, // Unidad anterior
+                fechaCambio: new Date(),
+              },
+            });
+
+            // Actualizar el personal
+            await this.prisma.personal.update({
+              where: { ci },
+              data: { fkCargo: cargo.id, fkUnidad: unidad.id, activo: true },
+            });
+
+            resumen.personalActualizado.push({
+              nombre: personalExistente.nombre,
+              ci: personalExistente.ci,
+              cambios,
+            });
+          } else {
+            resumen.personalSinCambios += 1;
+          }
+        } else {
+          // Crear nuevo personal
+          const nuevoPersonal = await this.prisma.personal.create({
+            data: { nombre, ci, fkCargo: cargo.id, fkUnidad: unidad.id, activo: true },
+          });
+
+          // Registrar el nuevo personal en el resumen
+          resumen.nuevosPersonales.push({
+            nombre: nuevoPersonal.nombre,
+            ci: nuevoPersonal.ci,
+          });
+
+          // Registrar el nuevo personal en el historial
+          await this.prisma.historialCargoUnidad.create({
+            data: {
+              fkPersonal: nuevoPersonal.id,
+              fkCargo: cargo.id,
+              fkUnidad: unidad.id,
+              fechaCambio: new Date(),
+            },
+          });
+        }
+      } catch (error) {
+        resumen.advertencias.push(`Error procesando la fila: ${JSON.stringify(row)}. Detalle: ${error.message}`);
+      }
     }
+
+    // Inactivar personal que ya no está en el CSV
+    const allPersonal = await this.prisma.personal.findMany();
+    for (const persona of allPersonal) {
+      const found = data.find((row) => row.ci === persona.ci);
+      if (!found && persona.activo) {
+        const activosAsignados = await this.prisma.activoUnidad.findMany({
+          where: {
+            fkPersonalActual: persona.id,
+            asignado: true,
+          },
+        });
+
+        if (activosAsignados.length === 0) {
+          // Marcar como inactivo
+          await this.prisma.personal.update({
+            where: { id: persona.id },
+            data: { activo: false },
+          });
+
+          // Añadir al resumen el personal inactivo
+          resumen.personalInactivo.push({
+            nombre: persona.nombre,
+            ci: persona.ci,
+            motivo: 'No encontrado en el CSV',
+          });
+        } else {
+          resumen.advertencias.push(
+            `El personal con CI ${persona.ci} no puede ser inactivado, tiene activos asignados.`
+          );
+        }
+      }
+    }
+
+    return {
+      ...resumen,
+      nuevosCargos: Array.from(resumen.nuevosCargos),
+      nuevasUnidades: Array.from(resumen.nuevasUnidades),
+    };
   }
 
-  async findAll(): Promise<Personal[]> {
-    return this.prisma.personal.findMany({
+  // Parsear el CSV
+  private parseCSV(buffer: Buffer): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const results = [];
+      const stream = Readable.from(buffer.toString());
+      stream
+        .pipe(csvParser())
+        .on('data', (data) => results.push(data))
+        .on('end', () => resolve(results))
+        .on('error', (error) => reject(error));
+    });
+  }
+
+  // Método para inactivar manualmente personal
+  async inactivatePersonal(ci: string): Promise<void> {
+    const personal = await this.prisma.personal.findUnique({ where: { ci } });
+
+    if (!personal) {
+      throw new NotFoundException('Personal no encontrado');
+    }
+
+    // Verificar si tiene activos asignados
+    const activosAsignados = await this.prisma.activoUnidad.findMany({
+      where: {
+        fkPersonalActual: personal.id,
+        asignado: true,
+      },
+    });
+
+    if (activosAsignados.length > 0) {
+      throw new BadRequestException(
+        `El personal con CI ${ci} no puede ser inactivado, tiene activos asignados.`
+      );
+    }
+
+    // Inactivar el personal
+    await this.prisma.personal.update({
+      where: { ci },
+      data: { activo: false },
+    });
+  }
+
+  // Obtener todos los personales y sus activos
+  async findAll(): Promise<any[]> {
+    const personales = await this.prisma.personal.findMany({
       include: {
         cargo: true,
         unidad: true,
         asignaciones: {
-          include: {
+          select: {
+            id: true,
             asignacionActivos: {
-              include: {
+              select: {
                 activoUnidad: {
-                  include: {
-                    activoModelo: true,
-                    asignacionHistorial: true,
-                    bajas: true,
-                    depreciaciones: true,
-                    mantenimientos: true,
-                    reasignaciones: true,
+                  select: {
+                    id: true,
+                    codigo: true,
+                    estadoActual: true,
+                    estadoCondicion: true,
+                    activoModelo: {
+                      select: { nombre: true },
+                    },
                   },
                 },
               },
@@ -49,43 +228,7 @@ export class PersonalService {
         },
       },
     });
-  }
-  
 
-  async findOne(id: number): Promise<Personal | null> {
-    const personal = await this.prisma.personal.findUnique({
-      where: { id },
-      include: { cargo: true, unidad: true },
-    });
-    if (!personal) {
-      throw new NotFoundException('Personal no encontrado');
-    }
-    this.notificationsService.sendNotification('personal-changed', personal);
-    return personal;
-  }
-
-  async update(id: number, updatePersonalDto: UpdatePersonalDto): Promise<Personal> {
-    try {
-      const personal = await this.prisma.personal.update({
-        where: { id },
-        data: updatePersonalDto,
-      });
-      this.notificationsService.sendNotification('personal-changed', personal);
-      return personal;
-    } catch (error) {
-      throw new BadRequestException('Error al actualizar el personal');
-    }
-  }
-
-  async remove(id: number): Promise<Personal> {
-    try {
-      const personal = await this.prisma.personal.delete({
-        where: { id },
-      });
-      this.notificationsService.sendNotification('personal-changed', personal);
-      return personal;
-    } catch (error) {
-      throw new NotFoundException('Error al eliminar el personal');
-    }
+    return personales;
   }
 }

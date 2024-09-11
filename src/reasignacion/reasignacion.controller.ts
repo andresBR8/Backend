@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, HttpCode, HttpStatus, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ReasignacionService } from './reasignacion.service';
 import { CreateReasignacionDto } from './dto/create-reasignacion.dto';
 import { UpdateReasignacionDto } from './dto/update-reasignacion.dto';
@@ -10,8 +10,15 @@ export class ReasignacionController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createReasignacionDto: CreateReasignacionDto) {
-    await this.reasignacionService.reasignarActivo(createReasignacionDto);
-    return { message: 'Reasignación creada exitosamente.' };
+    try {
+      await this.reasignacionService.reasignarActivo(createReasignacionDto);
+      return { message: 'Reasignación creada exitosamente.' };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Error al crear la reasignación.');
+    }
   }
 
   @Get()
@@ -22,25 +29,23 @@ export class ReasignacionController {
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    const reasignacion = await this.reasignacionService.getReasignacionById(+id);
-    return { message: `Reasignación con ID ${id} obtenida exitosamente.`, data: reasignacion };
+    try {
+      const reasignacion = await this.reasignacionService.getReasignacionById(+id);
+      return { message: `Reasignación con ID ${id} obtenida exitosamente.`, data: reasignacion };
+    } catch (error) {
+      throw new NotFoundException(`Reasignación con ID ${id} no encontrada.`);
+    }
   }
 
   @Get('ultima-asignacion/:fkActivoUnidad')
   async findUltimaAsignacion(@Param('fkActivoUnidad') fkActivoUnidad: number) {
-    const ultimaAsignacion = await this.reasignacionService.getUltimaAsignacion(fkActivoUnidad);
-    return { message: 'Última asignación obtenida exitosamente.', data: ultimaAsignacion };
+    try {
+      const ultimaAsignacion = await this.reasignacionService.getUltimaAsignacion(fkActivoUnidad);
+      return { message: 'Última asignación obtenida exitosamente.', data: ultimaAsignacion };
+    } catch (error) {
+      throw new NotFoundException(`No se encontró una asignación anterior para la unidad de activo con ID ${fkActivoUnidad}.`);
+    }
   }
 
-  @Put(':id')
-  async update(@Param('id') id: string, @Body() updateReasignacionDto: UpdateReasignacionDto) {
-    const reasignacion = await this.reasignacionService.updateReasignacion(+id, updateReasignacionDto);
-    return { message: `Reasignación con ID ${id} actualizada exitosamente.`, data: reasignacion };
-  }
-
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
-    await this.reasignacionService.deleteReasignacion(+id);
-  }
+  
 }

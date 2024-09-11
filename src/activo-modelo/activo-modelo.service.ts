@@ -12,19 +12,16 @@ export class ActivoModeloService {
     private notificationsService: NotificationsService
   ) {}
 
-  async createActivosModelos(createActivoModeloDtos: CreateActivoModeloDto[]): Promise<ActivoModelo[]> {
-    const activosModelos: ActivoModelo[] = [];
-    
-    // Recorremos el array de DTOs y procesamos cada uno
+  async createActivosModelos(createActivoModeloDtos: CreateActivoModeloDto[]): Promise<{ message: string }> {
+    // Batch creation of ActivoModelos
     for (const createActivoModeloDto of createActivoModeloDtos) {
-      const activoModelo = await this.createActivoModelo(createActivoModeloDto);
-      activosModelos.push(activoModelo);
+      await this.createActivoModelo(createActivoModeloDto);
     }
 
-    return activosModelos;
+    return { message: 'Modelos de activos creados correctamente' };
   }
 
-  async createActivoModelo(createActivoModeloDto: CreateActivoModeloDto): Promise<ActivoModelo> {
+  async createActivoModelo(createActivoModeloDto: CreateActivoModeloDto): Promise<void> {
     const {
       fkPartida,
       nombre,
@@ -39,8 +36,7 @@ export class ActivoModeloService {
       updatedBy,
       cantidad
     } = createActivoModeloDto;
-
-    // Creamos el objeto de datos que se insertará en la base de datos
+  
     const data: Prisma.ActivoModeloCreateInput = {
       nombre,
       descripcion,
@@ -59,33 +55,49 @@ export class ActivoModeloService {
       },
       cantidad,
     };
-
-    // Creación del modelo de activo en la base de datos
+  
     const activoModelo = await this.prisma.activoModelo.create({
       data,
     });
-
-    // Creamos las unidades correspondientes según la cantidad
-    const unidades = [];
-    for (let i = 1; i <= cantidad; i++) {
-      const codigoUnidad = `${codigoNuevo}-${i}`;
-      unidades.push({
-        fkActivoModelo: activoModelo.id,
-        codigo: codigoUnidad,
-        asignado: false,
-      });
-    }
-
-    // Inserción masiva de unidades en la base de datos
-    await this.prisma.activoUnidad.createMany({
+  
+    const unidades = Array.from({ length: cantidad }, (_, i) => ({
+      fkActivoModelo: activoModelo.id,
+      codigo: `${codigoNuevo}-${i + 1}`,
+      asignado: false,
+      costoActual: costo,
+      estadoActual: estado,
+      estadoCondicion: 'REGISTRADO',
+    }));
+  
+    const unidadesCreadas = await this.prisma.activoUnidad.createMany({
       data: unidades,
     });
-    
-    // Notificación de que un modelo de activo ha cambiado
+  
+    // Obtener las unidades creadas para registrar el historial
+    const unidadesIds = await this.prisma.activoUnidad.findMany({
+      where: {
+        fkActivoModelo: activoModelo.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+  
+    // Registrar el historial para cada unidad creada
+    for (const unidad of unidadesIds) {
+      await this.prisma.historialCambio.create({
+        data: {
+          fkActivoUnidad: unidad.id,
+          tipoCambio: 'EN ALMACEN',
+          detalle: `Unidad creada para el modelo ${nombre}`,
+          fechaCambio: new Date(),
+        },
+      });
+    }
+  
     this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
-
-    return activoModelo;
   }
+  
 
   async getActivosModelos(): Promise<ActivoModelo[]> {
     return this.prisma.activoModelo.findMany({
@@ -93,10 +105,19 @@ export class ActivoModeloService {
         partida: {
           select: {
             vidaUtil: true,
-            porcentajeDepreciacion: true
-          }
+            porcentajeDepreciacion: true,
+          },
         },
-        activoUnidades: true
+        activoUnidades: {
+          select: {
+            id: true,
+            codigo: true,
+            asignado: true,
+            costoActual: true,
+            estadoActual: true,
+            estadoCondicion: true,
+          },
+        },
       },
     });
   }
@@ -104,11 +125,28 @@ export class ActivoModeloService {
   async getActivoModeloById(id: number): Promise<ActivoModelo | null> {
     return this.prisma.activoModelo.findUnique({
       where: { id },
-      include: { partida: true, activoUnidades: true },
+      include: {
+        partida: {
+          select: {
+            vidaUtil: true,
+            porcentajeDepreciacion: true,
+          },
+        },
+        activoUnidades: {
+          select: {
+            id: true,
+            codigo: true,
+            asignado: true,
+            costoActual: true,
+            estadoActual: true,
+            estadoCondicion: true,
+          },
+        },
+      },
     });
   }
 
-  async updateActivoModelo(id: number, data: UpdateActivoModeloDto): Promise<ActivoModelo> {
+  async updateActivoModelo(id: number, data: UpdateActivoModeloDto): Promise<{ message: string }> {
     const activoModelo = await this.prisma.activoModelo.findUnique({
       where: { id },
     });
@@ -117,17 +155,25 @@ export class ActivoModeloService {
       throw new BadRequestException('Activo Modelo no encontrado');
     }
 
-    const updatedActivoModelo = await this.prisma.activoModelo.update({
+    const unidadesAsignadas = await this.prisma.activoUnidad.findMany({
+      where: { fkActivoModelo: id, asignado: true },
+    });
+
+    if (unidadesAsignadas.length > 0) {
+      throw new BadRequestException('No se puede editar un modelo con unidades asignadas');
+    }
+
+    await this.prisma.activoModelo.update({
       where: { id },
       data,
     });
 
-    this.notificationsService.sendNotification('activo-modelo-changed', updatedActivoModelo);
+    this.notificationsService.sendNotification('activo-modelo-changed', { id });
 
-    return updatedActivoModelo;
+    return { message: 'Modelo de activo actualizado correctamente' };
   }
 
-  async deleteActivoModelo(id: number): Promise<ActivoModelo> {
+  async deleteActivoModelo(id: number): Promise<{ message: string }> {
     const activoModelo = await this.prisma.activoModelo.findUnique({
       where: { id },
       include: { activoUnidades: true },
@@ -137,21 +183,22 @@ export class ActivoModeloService {
       throw new BadRequestException('Activo Modelo no encontrado');
     }
 
-    const allUnidadesAsignadas = activoModelo.activoUnidades.every(unidad => unidad.asignado);
+    const unidadesAsignadas = activoModelo.activoUnidades.filter(unidad => unidad.asignado);
 
-    if (!allUnidadesAsignadas) {
-      // Delete all related activoUnidades
-      await this.prisma.activoUnidad.deleteMany({
-        where: { fkActivoModelo: id },
-      });
-      this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
-
-      // Delete the activoModelo
-      return this.prisma.activoModelo.delete({
-        where: { id },
-      });
-    } else {
-      throw new BadRequestException('No se puede borrar el modelo porque existe al menos una unidad asignada');
+    if (unidadesAsignadas.length > 0) {
+      throw new BadRequestException('No se puede eliminar un modelo con unidades asignadas');
     }
+
+    await this.prisma.activoUnidad.deleteMany({
+      where: { fkActivoModelo: id },
+    });
+
+    await this.prisma.activoModelo.delete({
+      where: { id },
+    });
+
+    this.notificationsService.sendNotification('activo-modelo-changed', { id });
+
+    return { message: 'Modelo de activo eliminado correctamente' };
   }
 }

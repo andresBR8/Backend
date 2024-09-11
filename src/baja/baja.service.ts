@@ -2,17 +2,16 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma.service';
 import { Baja, BajaEstado } from '@prisma/client';
 import { CreateBajaDto } from './dto/create-baja.dto';
-import { UpdateBajaDto } from './dto/update-baja.dto';
 
 @Injectable()
 export class BajaService {
   constructor(private prisma: PrismaService) {}
 
   // Crear una nueva baja
-  async createBaja(createBajaDto: CreateBajaDto, userId: string): Promise<Baja> {
+  async createBaja(createBajaDto: CreateBajaDto, role: string): Promise<Baja> {
     const { fkActivoUnidad, fecha, motivo } = createBajaDto;
 
-    // Verificar si el activo ya está dado de baja o no existe
+    // Verificar si el activo existe y está asignado
     const activo = await this.prisma.activoUnidad.findUnique({
       where: { id: fkActivoUnidad },
     });
@@ -21,39 +20,63 @@ export class BajaService {
       throw new NotFoundException('Activo no encontrado');
     }
 
-    if (activo.asignado === false) {
-      throw new BadRequestException('El activo ya está dado de baja');
+    if (activo.asignado === true) {
+      throw new BadRequestException('El activo se encuentra asignado, proceda a devolver');
     }
 
     let estadoFinal: BajaEstado;
-
-    // Determinar si la baja requiere aprobación o no
-    if (userId === 'clzkl7aco00008bsngg4b1dcw') {
+    if (role === 'Administrador') {
       estadoFinal = BajaEstado.APROBADA;
-    } else if (userId === 'clzkl88g000018bsn923vxe84') {
+    } else if (role === 'Encargado') {
       estadoFinal = BajaEstado.PENDIENTE;
     } else {
       throw new ForbiddenException('No tiene permisos para realizar esta acción');
     }
 
-    // Crear la baja
-    const baja = await this.prisma.baja.create({
-      data: {
-        fkActivoUnidad,
-        fecha: new Date(fecha),
-        motivo,
-        estado: estadoFinal,
-        creadoPor: userId,
-      },
-    });
-
-    // Si la baja está aprobada automáticamente, marcar el activo como no asignado
-    if (estadoFinal === BajaEstado.APROBADA) {
-      await this.prisma.activoUnidad.update({
-        where: { id: fkActivoUnidad },
-        data: { asignado: false },
+    // Crear la baja y manejar transacciones
+    const baja = await this.prisma.$transaction(async (prisma) => {
+      const nuevaBaja = await prisma.baja.create({
+        data: {
+          fkActivoUnidad,
+          fecha: new Date(fecha),
+          motivo,
+          estado: estadoFinal,
+          creadoPor: role,
+          aprobadoPor: estadoFinal === BajaEstado.APROBADA ? role : null,
+        },
       });
-    }
+
+      if (estadoFinal === BajaEstado.APROBADA) {
+        await prisma.activoUnidad.update({
+          where: { id: fkActivoUnidad },
+          data: { 
+            asignado: false,
+            estadoCondicion: 'BAJA',
+            fkPersonalActual: null,
+          },
+        });
+
+        await prisma.historialCambio.create({
+          data: {
+            fkActivoUnidad,
+            tipoCambio: 'BAJA',
+            detalle: `Activo dado de baja por ${role}`,
+            fechaCambio: new Date(),
+          },
+        });
+      } else {
+        await prisma.historialCambio.create({
+          data: {
+            fkActivoUnidad,
+            tipoCambio: 'SOLICITUD_BAJA',
+            detalle: `Solicitud de baja realizada por ${role}`,
+            fechaCambio: new Date(),
+          },
+        });
+      }
+
+      return nuevaBaja;
+    });
 
     return baja;
   }
@@ -79,93 +102,65 @@ export class BajaService {
     return baja;
   }
 
-  // Actualizar una baja
-  async updateBaja(id: number, updateBajaDto: UpdateBajaDto): Promise<Baja> {
-    try {
-      const bajaExistente = await this.prisma.baja.findUnique({
-        where: { id },
-      });
+  // Aprobar una baja pendiente
+  async aprobarBaja(id: number, role: string, aprobar: boolean): Promise<Baja> {
+    const baja = await this.prisma.baja.findUnique({
+      where: { id },
+    });
 
-      if (!bajaExistente) {
-        throw new NotFoundException('Baja no encontrada');
-      }
-
-      return this.prisma.baja.update({
-        where: { id },
-        data: updateBajaDto,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al actualizar la baja: ${error.message}`);
+    if (!baja) {
+      throw new NotFoundException('Baja no encontrada');
     }
-  }
 
-  // Eliminar una baja y restaurar el estado del activo
-  async deleteBaja(id: number): Promise<Baja> {
-    try {
-      const bajaExistente = await this.prisma.baja.findUnique({
-        where: { id },
-      });
+    if (baja.estado !== BajaEstado.PENDIENTE) {
+      throw new BadRequestException('La baja ya ha sido procesada');
+    }
 
-      if (!bajaExistente) {
-        throw new NotFoundException('Baja no encontrada');
-      }
+    // Solo el administrador puede aprobar
+    if (role !== 'Administrador') {
+      throw new ForbiddenException('No tiene permisos para aprobar esta baja');
+    }
 
-      const baja = await this.prisma.baja.delete({
-        where: { id },
-      });
+    const estadoFinal = aprobar ? BajaEstado.APROBADA : BajaEstado.RECHAZADA;
 
-      // Restaurar el estado del activo a asignado
+    const bajaActualizada = await this.prisma.baja.update({
+      where: { id },
+      data: {
+        estado: estadoFinal,
+        aprobadoPor: estadoFinal === BajaEstado.APROBADA ? role : null,
+      },
+    });
+
+    if (estadoFinal === BajaEstado.APROBADA) {
       await this.prisma.activoUnidad.update({
         where: { id: baja.fkActivoUnidad },
-        data: { asignado: true },
-      });
-
-      return baja;
-    } catch (error) {
-      throw new NotFoundException('Error al eliminar la baja');
-    }
-  }
-
-  // Aprobar una baja pendiente
-  async aprobarBaja(id: number, userId: string, aprobar: boolean): Promise<Baja> {
-    try {
-      const baja = await this.prisma.baja.findUnique({
-        where: { id },
-      });
-
-      if (!baja) {
-        throw new NotFoundException('Baja no encontrada');
-      }
-
-      if (baja.estado !== BajaEstado.PENDIENTE) {
-        throw new BadRequestException('La baja ya ha sido procesada');
-      }
-
-      // Solo el administrador puede aprobar
-      if (userId !== 'clzkl7aco00008bsngg4b1dcw') {
-        throw new ForbiddenException('No tiene permisos para aprobar esta baja');
-      }
-
-      // Aprobar o rechazar la baja
-      const estadoFinal = aprobar ? BajaEstado.APROBADA : BajaEstado.RECHAZADA;
-
-      const bajaActualizada = await this.prisma.baja.update({
-        where: { id },
         data: {
-          estado: estadoFinal,
+          asignado: false,
+          estadoCondicion: 'BAJA',
         },
       });
 
-      if (estadoFinal === BajaEstado.APROBADA) {
-        await this.prisma.activoUnidad.update({
-          where: { id: baja.fkActivoUnidad },
-          data: { asignado: false },
-        });
-      }
-
-      return bajaActualizada;
-    } catch (error) {
-      throw new BadRequestException(`Error al procesar la baja: ${error.message}`);
+      // Registrar en el historial de cambios
+      await this.prisma.historialCambio.create({
+        data: {
+          fkActivoUnidad: baja.fkActivoUnidad,
+          tipoCambio: 'BAJA',
+          detalle: `Baja aprobada y activo marcado como dado de baja`,
+          fechaCambio: new Date(),
+        },
+      });
+    } else {
+      // Registrar en el historial de cambios en caso de rechazo
+      await this.prisma.historialCambio.create({
+        data: {
+          fkActivoUnidad: baja.fkActivoUnidad,
+          tipoCambio: 'BAJA_RECHAZADA',
+          detalle: `Baja rechazada por ${role}`,
+          fechaCambio: new Date(),
+        },
+      });
     }
+
+    return bajaActualizada;
   }
 }

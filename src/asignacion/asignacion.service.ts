@@ -12,83 +12,88 @@ export class AsignacionService {
     private notificationsService: NotificationsService,
   ) {}
 
-  async createAsignacion(createAsignacionDto: CreateAsignacionDto): Promise<Asignacion> {
-    const { fkUsuario, fkPersonal, fechaAsignacion, detalle, activosUnidades } = createAsignacionDto;
-
+  async createAsignacion(createAsignacionDto: CreateAsignacionDto): Promise<{ message: string }> {
+    const { fkUsuario, fkPersonal, fechaAsignacion, detalle, avalAsignacion, activosUnidades } = createAsignacionDto;
+  
+    // Validar la existencia del usuario y personal
+    const usuario = await this.prisma.user.findUnique({ where: { id: fkUsuario } });
+    const personal = await this.prisma.personal.findUnique({ where: { id: fkPersonal } });
+  
+    if (!usuario) throw new NotFoundException(`Usuario con ID ${fkUsuario} no encontrado`);
+    if (!personal) throw new NotFoundException(`Personal con ID ${fkPersonal} no encontrado`);
+  
+    // Validar todas las unidades antes de crear la asignación principal
+    for (const activoUnidad of activosUnidades) {
+      const { activoModeloId, unidades } = activoUnidad;
+  
+      const validUnidades = await this.prisma.activoUnidad.findMany({
+        where: {
+          id: { in: unidades },
+          fkActivoModelo: activoModeloId,
+          asignado: false,
+          estadoCondicion: { not: 'BAJA' },  // Asegurar que no esté en BAJA
+        },
+      });
+  
+      if (validUnidades.length !== unidades.length) {
+        throw new BadRequestException('Algunas unidades ya están asignadas, están dadas de baja o no existen.');
+      }
+    }
+  
+    // Si todas las validaciones fueron exitosas, crear la asignación principal
     const asignacion = await this.prisma.asignacion.create({
       data: {
         fkUsuario,
         fkPersonal,
+        avalAsignacion,
         fechaAsignacion: new Date(fechaAsignacion),
         detalle,
       },
     });
-
+  
+    // Actualizar cada unidad y registrar en el historial
     for (const activoUnidad of activosUnidades) {
-      const { activoModeloId, unidades } = activoUnidad;
-
+      const { unidades } = activoUnidad;
+  
       for (const unidadId of unidades) {
-        const unidad = await this.prisma.activoUnidad.findUnique({
-          where: { id: unidadId },
-        });
-
-        if (!unidad) {
-          throw new BadRequestException(`No se encontró la unidad de activo con ID ${unidadId}`);
-        }
-
-        if (unidad.asignado) {
-          throw new BadRequestException(`La unidad de activo con ID ${unidadId} ya está asignada`);
-        }
-
         await this.prisma.activoUnidad.update({
           where: { id: unidadId },
-          data: { asignado: true },
+          data: { 
+            asignado: true,
+            estadoCondicion: 'ASIGNADO',
+            fkPersonalActual: fkPersonal,
+          },
         });
-
+  
         await this.prisma.asignacionActivoUnidad.create({
           data: {
             fkAsignacion: asignacion.id,
             fkActivoUnidad: unidadId,
           },
         });
-
-        await this.prisma.asignacionHistorial.create({
+  
+        // Registrar en el historial de cambios
+        await this.prisma.historialCambio.create({
           data: {
             fkActivoUnidad: unidadId,
-            fkUsuario,
-            fkPersonal,
-            fechaAsignacion: new Date(fechaAsignacion),
-            detalle,
+            fkAsignacion: asignacion.id, // Se añade la relación a la asignación
+            tipoCambio: 'ASIGNACION',
+            detalle: `Unidad asignada a ${personal.nombre}`,
+            fechaCambio: new Date(),
           },
         });
       }
     }
-
-    // Obtener detalles del usuario y personal
-    const usuario = await this.prisma.user.findUnique({ where: { id: fkUsuario } });
-    const personal = await this.prisma.personal.findUnique({ where: { id: fkPersonal } });
-
-    if (!usuario) {
-      throw new NotFoundException(`Usuario con ID ${fkUsuario} no encontrado`);
-    }
-
-    if (!personal) {
-      throw new NotFoundException(`Personal con ID ${fkPersonal} no encontrado`);
-    }
-
-    // Construir el mensaje de notificación
-    const mensajeNotificacion = `Asignación realizada por el usuario ${usuario.name} al personal ${personal.nombre}`;
-
-    // Enviar notificación en tiempo real
-    this.notificationsService.sendNotification('asignacion-creada', {
-      asignacion,
-      mensaje: mensajeNotificacion,
-    });
-
-    return asignacion;
-  }
-
   
+    // Notificar la asignación
+    this.notificationsService.sendNotification('asignacion-creada', {
+      mensaje: `Asignación realizada por ${usuario.name} al personal ${personal.nombre}`,
+    });
+  
+    return { message: 'Asignación realizada correctamente' };
+  }
+  
+  // Función para obtener todas las asignaciones
   async getAsignaciones(): Promise<Asignacion[]> {
     return this.prisma.asignacion.findMany({
       include: { 
@@ -117,6 +122,8 @@ export class AsignacionService {
       },
     });
   }
+
+  // Función para obtener una asignación por ID
   async getAsignacionById(id: number): Promise<Asignacion | null> {
     return this.prisma.asignacion.findUnique({
       where: { id },
@@ -147,6 +154,7 @@ export class AsignacionService {
     });
   }
 
+  // Función para actualizar una asignación
   async updateAsignacion(id: number, updateAsignacionDto: UpdateAsignacionDto): Promise<Asignacion> {
     try {
       const asignacion = await this.prisma.asignacion.update({
@@ -163,6 +171,7 @@ export class AsignacionService {
     }
   }
 
+  // Función para eliminar una asignación
   async deleteAsignacion(id: number): Promise<Asignacion> {
     try {
       const asignacion = await this.prisma.asignacion.delete({

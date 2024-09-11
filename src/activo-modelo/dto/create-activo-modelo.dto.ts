@@ -25,6 +25,7 @@ export class CreateActivoModeloDto {
   @ApiProperty({ example: 1500.00 })
   @IsNotEmpty({ message: 'El costo es obligatorio.' })
   @IsNumber({}, { message: 'El costo debe ser un número.' })
+  @Min(0.01, { message: 'El costo debe ser mayor a 0.' })
   costo: number;
 
   @ApiProperty({ example: 'nuevo' })
@@ -44,7 +45,6 @@ export class CreateActivoModeloDto {
 
   @ApiProperty({ example: 'http://example.com/orden-compra.pdf' })
   @IsOptional()
-  @IsString({ message: 'La URL de la orden de compra debe ser una cadena de texto.' })
   ordenCompra?: string;
 
   @ApiProperty({ example: 'admin' })

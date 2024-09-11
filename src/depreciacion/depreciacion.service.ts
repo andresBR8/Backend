@@ -1,11 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Depreciacion, MetodoDepreciacion } from '@prisma/client';
 import { CreateDepreciacionDto } from './dto/create-depreciacion.dto';
-import { UpdateDepreciacionDto } from './dto/update-depreciacion.dto';
 import { NotificationsService } from '../notificaciones/notificaciones.service';
-import * as nodemailer from 'nodemailer';
-import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class DepreciacionService {
@@ -14,333 +11,204 @@ export class DepreciacionService {
     private notificationsService: NotificationsService,
   ) {}
 
-  // Crear una nueva depreciación para un activo específico
+  // Método que se ejecuta al iniciar la aplicación
+  async onModuleInit() {
+    const añoActual = new Date().getFullYear();
+    
+    // Comprobar si existe depreciación anual
+    const depreciacionExistente = await this.prisma.depreciacion.findFirst({
+      where: {
+        periodo: `${añoActual}`,
+        metodo: MetodoDepreciacion.LINEA_RECTA,
+      },
+    });
+
+    // Si no existe, realizar depreciación anual automáticamente
+    if (!depreciacionExistente) {
+      await this.depreciarTodosActivosAnualmente();
+    }
+
+    // Limpiar depreciaciones y registros de historial de años anteriores
+    await this.limpiarDepreciacionesAnteriores();
+  }
+
+  // Crear una nueva depreciación unitaria para un activo específico
   async createDepreciacion(createDepreciacionDto: CreateDepreciacionDto): Promise<Depreciacion> {
-    const { fkActivoUnidad, fecha, valor, periodo, metodo, causaEspecial } = createDepreciacionDto;
-  
-    try {
-      // Obtener la unidad del activo y su modelo para cálculo del valor neto
-      const activoUnidad = await this.prisma.activoUnidad.findUnique({
-        where: { id: fkActivoUnidad },
-        include: {
-          activoModelo: {
-            include: {
-              partida: true,  // Asegurarse de incluir la relación con la entidad "partida"
-            },
-          },
+    const { fkActivoUnidad, fecha, metodo, causaEspecial } = createDepreciacionDto;
+
+    const activoUnidad = await this.prisma.activoUnidad.findUnique({
+      where: { id: fkActivoUnidad },
+      include: {
+        activoModelo: {
+          include: { partida: true },
         },
-      });
-  
-      if (!activoUnidad) {
-        throw new NotFoundException(`Activo con ID ${fkActivoUnidad} no encontrado`);
-      }
-  
-      const { activoModelo } = activoUnidad;
-      const { partida } = activoModelo;
-  
-      if (!partida) {
-        throw new BadRequestException(`El modelo de activo con ID ${activoModelo.id} no tiene una partida asociada.`);
-      }
-  
-      // Calcular el valor de depreciación basado en el método seleccionado
-      const valorDepreciacion = metodo === MetodoDepreciacion.LINEA_RECTA
-        ? (activoModelo.costo * (partida.porcentajeDepreciacion / 100)) / 12  // Ajustado para calcular mensualmente
-        : activoModelo.costo * Math.pow((1 - (partida.porcentajeDepreciacion / 100)), 1 / 12);
-  
-      const valorNeto = activoModelo.costo - valorDepreciacion;  // Valor neto después de la depreciación
-  
-      const fechaActual = new Date(fecha).toISOString();
-  
-      // Verificar si ya existe una depreciación para este activo en el mes actual
-      const primerDiaDelMes = new Date(new Date(fecha).getFullYear(), new Date(fecha).getMonth(), 1).toISOString();
-      const depreciacionExistente = await this.prisma.depreciacion.findFirst({
-        where: {
+      },
+    });
+
+    if (!activoUnidad) {
+      throw new NotFoundException(`Activo con ID ${fkActivoUnidad} no encontrado`);
+    }
+
+    const { activoModelo, costoActual } = activoUnidad;
+    const { partida } = activoModelo;
+
+    if (!partida) {
+      throw new BadRequestException(`El modelo de activo con ID ${activoModelo.id} no tiene una partida asociada.`);
+    }
+
+    const valorDepreciacion = metodo === MetodoDepreciacion.LINEA_RECTA
+      ? (costoActual * (partida.porcentajeDepreciacion / 100)) / 12
+      : costoActual * Math.pow((1 - (partida.porcentajeDepreciacion / 100)), 1 / 12);
+
+    const nuevoCostoActual = costoActual - valorDepreciacion;
+    const fechaActual = new Date(fecha).toISOString();
+
+    const depreciacion = await this.prisma.$transaction(async (prisma) => {
+      // Crear nueva depreciación
+      const nuevaDepreciacion = await prisma.depreciacion.create({
+        data: {
           fkActivoUnidad,
-          fecha: {
-            gte: primerDiaDelMes,
-          },
+          fecha: fechaActual,
+          valor: valorDepreciacion,
+          valorNeto: nuevoCostoActual,
+          periodo: `${new Date(fecha).getFullYear()}`,
+          metodo,
+          causaEspecial,
         },
       });
-  
-      let depreciacion;
-  
-      if (depreciacionExistente) {
-        // Actualizar la depreciación existente
-        depreciacion = await this.prisma.depreciacion.update({
-          where: { id: depreciacionExistente.id },
-          data: {
-            valor: valorDepreciacion,
-            valorNeto: valorNeto,
-            metodo,
-            causaEspecial: causaEspecial || depreciacionExistente.causaEspecial,
-          },
-        });
-      } else {
-        // Crear una nueva depreciación si no existe una para el mes
-        depreciacion = await this.prisma.depreciacion.create({
-          data: {
-            fkActivoUnidad,
-            fecha: fechaActual,
-            valor: valorDepreciacion,
-            valorNeto,  // Guardar el valor neto calculado
-            periodo,
-            metodo,
-            causaEspecial,
-          },
-        });
-      }
-  
-      // Enviar notificación vía WebSocket
-      this.notificationsService.sendNotification('depreciacion-create', {
-        message: `Se ha realizado la depreciación del activo con ID ${fkActivoUnidad}`,
-        depreciacion,
-      }, ['Administrador', 'Encargado']);
-  
-      return depreciacion;
-    } catch (error) {
-      throw new BadRequestException(`Error al crear la depreciación: ${error.message}`);
-    }
-  }
-  
-  
 
-  // Obtener todas las depreciaciones
-  async getDepreciaciones(): Promise<Depreciacion[]> {
-    return this.prisma.depreciacion.findMany({
-      include: {
-        activoUnidad: {
-          include: {
-            activoModelo: true,
-          },
-        },
-      },
-    });
-  }
+      // Actualizar el costo actual del activo
+      await prisma.activoUnidad.update({
+        where: { id: fkActivoUnidad },
+        data: { costoActual: nuevoCostoActual },
+      });
 
-  // Obtener una depreciación por su ID
-  async getDepreciacionById(id: number): Promise<Depreciacion | null> {
-    const depreciacion = await this.prisma.depreciacion.findUnique({
-      where: { id },
-      include: {
-        activoUnidad: {
-          include: {
-            activoModelo: true,
-          },
+      // Registrar el cambio en el historial de cambios
+      await prisma.historialCambio.create({
+        data: {
+          fkActivoUnidad,
+          tipoCambio: 'DEPRECIACION',
+          fkDepreciacion: nuevaDepreciacion.id,
+          detalle: `Depreciación aplicada con método ${metodo}. Nuevo costo: ${nuevoCostoActual}`,
+          fechaCambio: new Date(),
         },
-      },
+      });
+
+      return nuevaDepreciacion;
     });
-    if (!depreciacion) {
-      throw new NotFoundException('Depreciación no encontrada');
-    }
+
+    // Enviar notificación
+    this.notificationsService.sendNotification('depreciacion-create', {
+      message: `Se ha realizado la depreciación del activo con ID ${fkActivoUnidad}`,
+    }, ['Administrador', 'Encargado']);
+
     return depreciacion;
   }
 
-  // Actualizar una depreciación existente
-  async updateDepreciacion(id: number, updateDepreciacionDto: UpdateDepreciacionDto): Promise<Depreciacion> {
-    try {
-      return this.prisma.depreciacion.update({
-        where: { id },
-        data: updateDepreciacionDto,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al actualizar la depreciación: ${error.message}`);
-    }
-  }
-
-  // Eliminar una depreciación por su ID
-  async deleteDepreciacion(id: number): Promise<Depreciacion> {
-    try {
-      const depreciacion = await this.prisma.depreciacion.delete({
-        where: { id },
-      });
-      if (!depreciacion) {
-        throw new NotFoundException('Depreciación no encontrada');
-      }
-      return depreciacion;
-    } catch (error) {
-      throw new NotFoundException('Error al eliminar la depreciación');
-    }
-  }
-
   // Depreciar todos los activos automáticamente al final del año
-  @Cron('0 0 31 12 *')
   async depreciarTodosActivosAnualmente(): Promise<void> {
-    try {
-      const activos = await this.prisma.activoUnidad.findMany({
-        include: {
-          activoModelo: {
-            include: {
-              partida: true,
-            },
+    const añoActual = new Date().getFullYear();
+
+    const activos = await this.prisma.activoUnidad.findMany({
+      include: {
+        activoModelo: {
+          include: {
+            partida: true,
           },
         },
-      });
-
-      const ahora = new Date().toISOString();
-      for (const activo of activos) {
-        const { activoModelo } = activo;
-        const { partida } = activoModelo;
-        const valorDepreciacion = (activoModelo.costo * partida.porcentajeDepreciacion) / 100;
-
-        const valorNeto = activoModelo.costo - valorDepreciacion;
-
-        await this.prisma.depreciacion.create({
-          data: {
-            fkActivoUnidad: activo.id,
-            fecha: ahora,
-            valor: valorDepreciacion,
-            valorNeto: valorNeto,
-            periodo: 'ANUAL',
-            metodo: MetodoDepreciacion.LINEA_RECTA,
-          },
-        });
-      }
-
-      // Enviar reporte y notificación
-      const reporte = await this.getReporteDepreciacion();
-      await this.enviarReportePorCorreo(reporte);
-      this.notificationsService.sendNotification('depreciacion-annual', {
-        message: 'Se ha completado la depreciación anual de todos los activos.',
-        reporte,
-      }, ['Administrador']);
-    } catch (error) {
-      throw new BadRequestException(`Error al depreciar todos los activos: ${error.message}`);
-    }
+      },
+    });
+    // Enviar notificación
+    this.notificationsService.sendNotification('depreciacion-anual-create', {
+      message: `Se ha realizado la depreciación anual para el año ${añoActual}`,
+    }, ['Administrador', 'Encargado']);
   }
 
-  // Depreciar todos los activos mensualmente (opcional)
-  async depreciarTodosActivosMensualmente(): Promise<void> {
-    try {
-      const ahora = new Date();
-      const primerDiaDelMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString();
-  
-      // Verificar si ya se ha realizado una depreciación este mes
-      const depreciacionExistente = await this.prisma.depreciacion.findFirst({
+  // Limpiar depreciaciones y registros de años anteriores
+  async limpiarDepreciacionesAnteriores(): Promise<void> {
+    const añoActual = new Date().getFullYear();
+    const primerDiaDelAño = new Date(`${añoActual}-01-01`).toISOString();
+
+    await this.prisma.$transaction(async (prisma) => {
+      // Eliminar depreciaciones de años anteriores excepto las más recientes
+      await prisma.depreciacion.deleteMany({
         where: {
-          periodo: 'MENSUAL',
           fecha: {
-            gte: primerDiaDelMes,
+            lt: primerDiaDelAño,
+          },
+          metodo: MetodoDepreciacion.LINEA_RECTA,
+        },
+      });
+
+      // Eliminar registros en el historial relacionados con esas depreciaciones
+      await prisma.historialCambio.deleteMany({
+        where: {
+          tipoCambio: 'DEPRECIACION_ANUAL',
+          fechaCambio: {
+            lt: primerDiaDelAño,
           },
         },
       });
-  
-      if (depreciacionExistente) {
-        throw new BadRequestException('Ya se ha realizado una depreciación mensual este mes.');
-      }
-  
-      const activos = await this.prisma.activoUnidad.findMany({
-        include: {
-          activoModelo: {
-            include: {
-              partida: true,
-            },
+    });
+  }
+
+  // Depreciar todos los activos de forma manual para un año específico
+  async depreciarTodosActivosManual(año: number): Promise<void> {
+    const primerDiaDelAño = new Date(`${año}-01-01`).toISOString();
+
+    // Eliminar las depreciaciones anteriores para este año
+    await this.prisma.depreciacion.deleteMany({
+      where: {
+        periodo: `Manual_${año}`,
+      },
+    });
+
+    const activos = await this.prisma.activoUnidad.findMany({
+      include: {
+        activoModelo: {
+          include: {
+            partida: true,
           },
         },
-      });
-  
-      const fechaActual = ahora.toISOString();
+      },
+    });
+
+    await this.prisma.$transaction(async (prisma) => {
       for (const activo of activos) {
-        const { activoModelo } = activo;
-        const { partida } = activoModelo;
-        const valorDepreciacion =activoModelo.costo - activoModelo.costo * ((partida.porcentajeDepreciacion / 100) / 12);
-        console.log(activoModelo.costo, valorDepreciacion,partida.porcentajeDepreciacion);
-  
-        await this.prisma.depreciacion.create({
+        const valorDepreciacion = (activo.costoActual * activo.activoModelo.partida.porcentajeDepreciacion) / 100;
+        const nuevoCostoActual = activo.costoActual - valorDepreciacion;
+
+        const depreciacion = await prisma.depreciacion.create({
           data: {
             fkActivoUnidad: activo.id,
-            fecha: fechaActual,
+            fecha: primerDiaDelAño,
             valor: valorDepreciacion,
-            valorNeto: valorDepreciacion,
-            periodo: 'MENSUAL',
+            valorNeto: nuevoCostoActual,
+            periodo: `Manual_${año}`,
             metodo: MetodoDepreciacion.LINEA_RECTA,
           },
         });
+
+        // Actualizar el costo actual del activo
+        await prisma.activoUnidad.update({
+          where: { id: activo.id },
+          data: { costoActual: nuevoCostoActual },
+        });
       }
-  
-      // Notificar al usuario (opcional, sin envío de correo mensual)
-      this.notificationsService.sendNotification('depreciacion-monthly', {
-        message: 'Se ha completado la depreciación mensual de todos los activos.',
-      }, ['Administrador']);
-    } catch (error) {
-      throw new BadRequestException(`Error al depreciar todos los activos: ${error.message}`);
-    }
+    });
   }
-  
 
-  // Obtener las depreciaciones del último mes
-  async getDepreciacionesUltimoMes(): Promise<Depreciacion[]> {
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
+  // Obtener depreciaciones de un año específico
+  async obtenerDepreciacionesPorAño(año: number): Promise<Depreciacion[]> {
     return this.prisma.depreciacion.findMany({
       where: {
-        fecha: {
-          gte: firstDayOfMonth.toISOString(),
+        periodo: {
+          contains: `${año}`,
         },
       },
       include: {
-        activoUnidad: {
-          include: {
-            activoModelo: true,
-          },
-        },
+        activoUnidad: true,
       },
-    });
-  }
-
-  // Obtener reportes de depreciación
-  async getReporteDepreciacion(): Promise<any> {
-    try {
-      const depreciaciones = await this.prisma.depreciacion.findMany({
-        include: {
-          activoUnidad: {
-            include: {
-              activoModelo: {
-                include: {
-                  partida: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      const reporte = depreciaciones.map((dep) => ({
-        id: dep.id,
-        activoUnidad: dep.activoUnidad.codigo,
-        descripcion: dep.activoUnidad.activoModelo.descripcion,
-        fecha: dep.fecha,
-        valor: dep.valor,
-        metodo: dep.metodo,
-        periodo: dep.periodo,
-        partida: dep.activoUnidad.activoModelo.partida.nombre,
-      }));
-
-      return reporte;
-    } catch (error) {
-      throw new BadRequestException(`Error al generar el reporte de depreciación: ${error.message}`);
-    }
-  }
-
-  // Enviar reporte por correo al administrador (anual)
-  private async enviarReportePorCorreo(reporte: any): Promise<void> {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: 'activosfijosuaemi@gmail.com',
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
-
-    const htmlContent = `<h1>Reporte Anual de Depreciaciones</h1><pre>${JSON.stringify(reporte, null, 2)}</pre>`;
-
-    await transporter.sendMail({
-      from: 'activosfijosuaemi@gmail.com',
-      to: 'admin@example.com',
-      subject: 'Reporte Anual de Depreciaciones',
-      html: htmlContent,
     });
   }
 }

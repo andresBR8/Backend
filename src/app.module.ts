@@ -17,15 +17,17 @@ import { CargoModule } from './cargo/cargo.module';
 import { UnidadModule } from './unidad/unidad.module';
 import { PartidaModule } from './partida/partida.module';
 import { ActivoModeloModule } from './activo-modelo/activo-modelo.module';
-import { ActivoUnidadModule } from './activo-unidad/activo-unidad.module';
 import { AsignacionModule } from './asignacion/asignacion.module';
-import { AsignacionActivoUnidadModule } from './asignacion-activo-unidad/asignacion-activo-unidad.module';
 import { BajaModule } from './baja/baja.module';
 import { DepreciacionModule } from './depreciacion/depreciacion.module';
 import { NotificationsModule } from './notificaciones/notificaciones.module';
 import { ReasignacionModule } from './reasignacion/reasignacion.module';
 import {BackupModule} from './backup/backup.module';
-import { ReportesModule } from './reportes/reportes.module';
+import { EstadoActivoModule } from './estado-activo/estado-activo.module';
+import { SeguimientoModule } from './seguimiento/seguimiento.module';
+import { DevolucionModule } from './devolucion/devolucion.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+
 
 
 
@@ -44,15 +46,17 @@ import { ReportesModule } from './reportes/reportes.module';
     UnidadModule,
     PartidaModule,
     ActivoModeloModule,
-    ActivoUnidadModule,
     AsignacionModule,
-    AsignacionActivoUnidadModule,
+    
     BajaModule,
     DepreciacionModule,
     NotificationsModule,
     ReasignacionModule,
     BackupModule,
-    ReportesModule,
+    EstadoActivoModule,
+    SeguimientoModule,
+    DevolucionModule,
+    DashboardModule,
     
   ],
   controllers: [HelloController, UploadController],

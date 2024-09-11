@@ -17,6 +17,7 @@ export class AuthController {
             const result = await this.authService.login(req.user);
             res.status(200).json(result);
         } catch (error) {
+            console.log(error);
             if (error instanceof UnauthorizedException) {
                 res.status(401).json({ message: 'Nombre de usuario o contraseña incorrectos.' });
             } else {
