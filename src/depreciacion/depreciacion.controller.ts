@@ -1,65 +1,44 @@
-import { Controller, Get, Post, Body, Param, Res, HttpStatus, BadRequestException, UsePipes, ValidationPipe, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
 import { DepreciacionService } from './depreciacion.service';
-import { CreateDepreciacionDto } from './dto/create-depreciacion.dto';
-import { Response } from 'express';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { MetodoDepreciacion } from '@prisma/client';
 
-@ApiTags('depreciacion')
 @Controller('depreciacion')
 export class DepreciacionController {
   constructor(private readonly depreciacionService: DepreciacionService) {}
 
-  @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  @ApiOperation({ summary: 'Crear una nueva depreciación específica' })
-  @ApiResponse({ status: 201, description: 'La depreciación ha sido creada exitosamente.' })
-  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async create(@Body() createDepreciacionDto: CreateDepreciacionDto, @Res() res: Response) {
-    try {
-      const depreciacion = await this.depreciacionService.createDepreciacion(createDepreciacionDto);
-      return res.status(HttpStatus.CREATED).json({
-        message: 'Depreciación creada exitosamente',
-        data: depreciacion,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al crear la depreciación: ${error.message}`);
+  @Get('comparacion')
+  async getDepreciationComparison(@Query('años') años: string) {
+    if (!años) {
+      throw new BadRequestException('Se debe proporcionar uno o más años en la consulta.');
     }
+
+    const parsedAños = años.split(',').map(Number);
+    if (parsedAños.some(isNaN)) {
+      throw new BadRequestException('Uno o más de los años proporcionados no son válidos.');
+    }
+
+    return this.depreciacionService.getDepreciationComparison(parsedAños);
   }
 
-  @Post('depreciar-todos-anual')
-  @ApiOperation({ summary: 'Depreciar todos los activos automáticamente al final del año' })
-  @ApiResponse({ status: 201, description: 'Depreciación anual realizada exitosamente.' })
-  @ApiResponse({ status: 400, description: 'Solicitud incorrecta' })
-  async depreciarTodosAnual(@Res() res: Response) {
-    try {
-      await this.depreciacionService.depreciarTodosActivosAnualmente();
-      return res.status(HttpStatus.CREATED).json({
-        message: 'Depreciación anual realizada exitosamente.',
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al realizar la depreciación anual: ${error.message}`);
+  @Get('metodo')
+  async obtenerDepreciacionPorAñoYMetodo(
+    @Query('año') año: string,
+    @Query('metodo') metodo: string,
+  ) {
+    const parsedAño = parseInt(año);
+    if (isNaN(parsedAño)) {
+      throw new BadRequestException('El año proporcionado no es válido.');
     }
+
+    if (!Object.values(MetodoDepreciacion).includes(metodo as MetodoDepreciacion)) {
+      throw new BadRequestException('Método de depreciación no válido.');
+    }
+
+    return this.depreciacionService.obtenerDepreciacionPorAñoYMetodo(parsedAño, metodo as MetodoDepreciacion);
   }
 
-  @Get('por-ano/:año')
-  @ApiOperation({ summary: 'Obtener depreciaciones para un año específico' })
-  @ApiResponse({ status: 200, description: 'Depreciaciones obtenidas exitosamente.' })
-  @ApiResponse({ status: 404, description: 'Depreciaciones no encontradas.' })
-  async obtenerDepreciacionesPorAño(@Param('año') año: number, @Res() res: Response) {
-    try {
-      const depreciaciones = await this.depreciacionService.obtenerDepreciacionesPorAño(año);
-      if (!depreciaciones || depreciaciones.length === 0) {
-        throw new NotFoundException(`No se encontraron depreciaciones para el año ${año}`);
-      }
-      return res.status(HttpStatus.OK).json({
-        message: `Depreciaciones para el año ${año} obtenidas exitosamente`,
-        data: depreciaciones,
-      });
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Error al obtener las depreciaciones: ${error.message}`);
-    }
+  @Get('año-actual')
+  async obtenerDepreciacionAñoActual() {
+    return this.depreciacionService.obtenerDepreciacionAñoActual();
   }
 }

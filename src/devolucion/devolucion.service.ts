@@ -13,55 +13,36 @@ export class DevolucionService {
 
   async createDevolucion(createDevolucionDto: CreateDevolucionDto): Promise<{ message: string }> {
     const { fkUsuario, fkPersonal, fecha, detalle, actaDevolucion, activosUnidades } = createDevolucionDto;
-
+  
     // Validar la existencia del usuario y personal
     const usuario = await this.prisma.user.findUnique({ where: { id: fkUsuario } });
     const personal = await this.prisma.personal.findUnique({ where: { id: fkPersonal } });
-
+  
     if (!usuario) throw new NotFoundException(`Usuario con ID ${fkUsuario} no encontrado`);
     if (!personal) throw new NotFoundException(`Personal con ID ${fkPersonal} no encontrado`);
-
+  
     // Iniciar transacción para asegurarnos de que todas las devoluciones se procesan correctamente
     return await this.prisma.$transaction(async (prisma) => {
       // Validar todas las unidades antes de crear las devoluciones
       for (const activoUnidad of activosUnidades) {
         const { fkActivoUnidad } = activoUnidad;
-
+  
         const unidad = await prisma.activoUnidad.findUnique({
           where: { id: fkActivoUnidad },
-          include: {
-            asignacionActivos: true,
-            reasignaciones: true,
-          },
         });
-
-        if (!unidad || unidad.asignado === false) {
-          throw new BadRequestException('Algunas unidades ya fueron devueltas o no están asignadas.');
-        }
-
-        // Asegurar que el activo esté asignado al personal actual (validando contra la última reasignación/asignación)
-        const ultimoCambio = await prisma.historialCambio.findFirst({
-          where: {
-            fkActivoUnidad,
-          },
-          orderBy: {
-            fechaCambio: 'desc',
-          },
-          include: {
-            reasignacion: true,
-            asignacion: true,
-          },
-        });
-
-        if (ultimoCambio?.reasignacion?.fkPersonalNuevo !== fkPersonal &&
-          ultimoCambio?.asignacion?.fkPersonal !== fkPersonal) {
-          throw new BadRequestException(`El activo ${unidad.codigo} no está asignado al personal actual.`);
+  
+        // Validar si la unidad está asignada y si está asignada al personal actual
+        if (!unidad || !unidad.asignado || unidad.fkPersonalActual !== fkPersonal) {
+          throw new BadRequestException(
+            `El activo con código ${unidad?.codigo || fkActivoUnidad} no está asignado al personal actual o ya ha sido devuelto.`
+          );
         }
       }
-
+  
       // Crear todas las devoluciones
       for (const activoUnidad of activosUnidades) {
         const { fkActivoUnidad } = activoUnidad;
+  
         // Crear devolución en la base de datos
         const devolucion = await prisma.devolucion.create({
           data: {
@@ -71,10 +52,10 @@ export class DevolucionService {
             actaDevolucion,
             fecha: new Date(fecha),
             detalle,
-          } as Prisma.DevolucionUncheckedCreateInput,
+          },
         });
-
-        // Actualizar la unidad a "no asignada"
+  
+        // Actualizar la unidad a "no asignada" y limpiar el campo `fkPersonalActual`
         await prisma.activoUnidad.update({
           where: { id: fkActivoUnidad },
           data: {
@@ -83,7 +64,7 @@ export class DevolucionService {
             estadoCondicion: 'DISPONIBLE',
           },
         });
-
+  
         // Registrar el cambio en el historial
         await prisma.historialCambio.create({
           data: {
@@ -95,15 +76,12 @@ export class DevolucionService {
           },
         });
       }
-
-      // Notificar la devolución
-      this.notificationsService.sendNotification('devolucion-creada', {
-        mensaje: `Devolución realizada por ${usuario.name} del personal ${personal.nombre}`,
-      });
-
+      
+  
       return { message: 'Devoluciones realizadas correctamente' };
     });
   }
+  
 
   // Función para obtener todas las devoluciones
   async getDevoluciones() {

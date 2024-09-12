@@ -85,10 +85,6 @@ export class AsignacionService {
       }
     }
   
-    // Notificar la asignación
-    this.notificationsService.sendNotification('asignacion-creada', {
-      mensaje: `Asignación realizada por ${usuario.name} al personal ${personal.nombre}`,
-    });
   
     return { message: 'Asignación realizada correctamente' };
   }
@@ -162,8 +158,7 @@ export class AsignacionService {
         data: updateAsignacionDto,
       });
 
-      // Enviar notificación en tiempo real
-      this.notificationsService.sendNotification('asignacion-actualizada', asignacion);
+      
 
       return asignacion;
     } catch (error) {
@@ -178,8 +173,6 @@ export class AsignacionService {
         where: { id },
       });
 
-      // Enviar notificación en tiempo real
-      this.notificationsService.sendNotification('asignacion-eliminada', asignacion);
 
       return asignacion;
     } catch (error) {

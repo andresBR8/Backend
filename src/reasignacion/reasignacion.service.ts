@@ -82,11 +82,7 @@ export class ReasignacionService {
       // Construir el mensaje de notificación
       const mensajeNotificacion = `Reasignación realizada: Usuario anterior: ${usuarioAnterior.name}, Usuario nuevo: ${usuarioNuevo.name}, Personal anterior: ${personalAnterior.nombre}, Personal nuevo: ${personalNuevo.nombre}`;
 
-      // Enviar notificación en tiempo real
-      this.notificationsService.sendNotification('reasignacion-creada', {
-        reasignacion: nuevaReasignacion,
-        mensaje: mensajeNotificacion,
-      });
+      
 
       return { message: 'Reasignación realizada correctamente' };
     });

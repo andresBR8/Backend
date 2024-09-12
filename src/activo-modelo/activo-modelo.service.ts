@@ -67,24 +67,30 @@ export class ActivoModeloService {
       costoActual: costo,
       estadoActual: estado,
       estadoCondicion: 'REGISTRADO',
+      fkPersonalActual: null,
     }));
   
-    const unidadesCreadas = await this.prisma.activoUnidad.createMany({
+    await this.prisma.activoUnidad.createMany({
       data: unidades,
     });
   
-    // Obtener las unidades creadas para registrar el historial
-    const unidadesIds = await this.prisma.activoUnidad.findMany({
+    // Obtener las unidades creadas para registrar el historial y usarlas en la notificación
+    const unidadesCreadas = await this.prisma.activoUnidad.findMany({
       where: {
         fkActivoModelo: activoModelo.id,
       },
       select: {
         id: true,
+        codigo: true,
+        asignado: true,
+        costoActual: true,
+        estadoActual: true,
+        estadoCondicion: true,
       },
     });
   
     // Registrar el historial para cada unidad creada
-    for (const unidad of unidadesIds) {
+    for (const unidad of unidadesCreadas) {
       await this.prisma.historialCambio.create({
         data: {
           fkActivoUnidad: unidad.id,
@@ -95,8 +101,35 @@ export class ActivoModeloService {
       });
     }
   
-    this.notificationsService.sendNotification('activo-modelo-changed', activoModelo);
+    // Notificación general que incluye detalles del modelo y unidades creadas
+    this.notificationsService.sendGeneralNotification('activo-modelo-changed', {
+      action: 'created',
+      activoModelo: {
+        id: activoModelo.id,
+        fkPartida,
+        nombre: activoModelo.nombre,
+        descripcion: activoModelo.descripcion,
+        fechaIngreso: activoModelo.fechaIngreso,
+        costo: activoModelo.costo,
+        estado: activoModelo.estado,
+        codigoAnterior: activoModelo.codigoAnterior,
+        codigoNuevo: activoModelo.codigoNuevo,
+        ordenCompra: activoModelo.ordenCompra,
+        createdAt: activoModelo.createdAt,
+        updatedAt: activoModelo.updatedAt,
+        createdBy: activoModelo.createdBy,
+        updatedBy: activoModelo.updatedBy,
+        cantidad: activoModelo.cantidad,
+        partida: {
+          vidaUtil: (await this.prisma.partida.findUnique({ where: { id: fkPartida } })).vidaUtil,
+          porcentajeDepreciacion: (await this.prisma.partida.findUnique({ where: { id: fkPartida } })).porcentajeDepreciacion,
+        },
+        activoUnidades: unidadesCreadas
+      }
+    });
   }
+  
+  
   
 
   async getActivosModelos(): Promise<ActivoModelo[]> {
@@ -168,7 +201,11 @@ export class ActivoModeloService {
       data,
     });
 
-    this.notificationsService.sendNotification('activo-modelo-changed', { id });
+    this.notificationsService.sendGeneralNotification('activo-modelo-changed', {
+      action: 'updated',
+      id,
+      ...data
+    });
 
     return { message: 'Modelo de activo actualizado correctamente' };
   }
@@ -197,7 +234,10 @@ export class ActivoModeloService {
       where: { id },
     });
 
-    this.notificationsService.sendNotification('activo-modelo-changed', { id });
+   this.notificationsService.sendGeneralNotification('activo-modelo-changed', {
+      action: 'deleted',
+      activoModelo: activoModelo,
+    });
 
     return { message: 'Modelo de activo eliminado correctamente' };
   }

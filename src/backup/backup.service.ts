@@ -20,15 +20,13 @@ export class BackupService {
     return new Promise((resolve, reject) => {
       exec(backupCommand, async (error, stdout, stderr) => {
         if (error) {
-          //this.sendNotification('Error realizando el backup', error.message, ['Encargado', 'Administrador']);
-          this.notificationsService.sendNotification('backup-error', { message: error.message }, ['Encargado', 'Administrador']);
+          
           return reject(new InternalServerErrorException(`Error realizando el backup: ${error.message}`));
         }
 
         exec(`docker exec ${containerName} cat /tmp/${backupName}`, async (catError, catStdout, catStderr) => {
           if (catError) {
-            //this.sendNotification('Error leyendo el archivo de backup', catError.message, ['Encargado', 'Administrador']);
-            this.notificationsService.sendNotification('backup-error', { message: catError.message }, ['Encargado', 'Administrador']);
+            
             return reject(new InternalServerErrorException(`Error leyendo el archivo de backup: ${catError.message}`));
           }
 
@@ -38,12 +36,10 @@ export class BackupService {
             await uploadBytes(storageRef, buffer);
 
             const backupUrl = await getDownloadURL(storageRef);
-            //this.sendNotification('Backup realizado exitosamente', `El backup está disponible en: ${backupUrl}`, ['Encargado', 'Administrador']);
-            this.notificationsService.sendNotification('backup-success', { message: 'Backup realizado exitosamente', backupUrl }, ['Encargado', 'Administrador']);
+            
             resolve({ backupUrl });
           } catch (uploadError) {
-            //this.sendNotification('Error subiendo el archivo de backup a Firebase', uploadError.message, ['Encargado', 'Administrador']);
-            this.notificationsService.sendNotification('backup-error', { message: uploadError.message }, ['Encargado', 'Administrador']);
+            
             reject(new InternalServerErrorException(`Error subiendo el archivo de backup a Firebase: ${uploadError.message}`));
           }
         });
@@ -68,7 +64,5 @@ export class BackupService {
       subject,
       text: message,
     });
-
-    this.notificationsService.sendNotification('backup-success', { subject, message }, roles);
   }
 }

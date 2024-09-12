@@ -35,7 +35,7 @@ export class UsersService {
       where: { id },
       data,
     });
-    this.notificationsService.sendNotification('user-changed', user);
+    
     
     return user;
   }
@@ -65,8 +65,7 @@ export class UsersService {
       },
     });
 
-    this.notificationsService.sendNotification('user-changed', user);
-    return user;
+    
   }
 
   async getUsers(): Promise<User[]> {
@@ -83,7 +82,7 @@ export class UsersService {
     const user = await this.prisma.user.delete({
       where: { id },
     });
-    this.notificationsService.sendNotification('user-changed', user);
+    
     return user;
   }
 }
