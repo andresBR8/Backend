@@ -109,10 +109,7 @@ export class PersonalController {
     }
   }
 
-  // Crear revisión periódica (por ejemplo, el 20 de diciembre)
   @Post('revision-periodica')
-  @ApiOperation({ summary: 'Crear revisión periódica' })
-  @ApiResponse({ status: 201, description: 'Revisión periódica creada exitosamente.' })
   async createPeriodicRevision(@Res() res: Response) {
     try {
       await this.personalService.createPeriodicRevision();
@@ -124,10 +121,7 @@ export class PersonalController {
     }
   }
 
-  // Crear revisión sorpresa
   @Post('revision-sorpresa')
-  @ApiOperation({ summary: 'Crear revisión sorpresa' })
-  @ApiResponse({ status: 201, description: 'Revisión sorpresa creada exitosamente.' })
   async createSurpriseRevision(@Res() res: Response) {
     try {
       await this.personalService.createSurpriseRevision();
@@ -139,15 +133,8 @@ export class PersonalController {
     }
   }
 
-  // Crear revisión individual
   @Post('revision-individual/:ci/:tipo')
-  @ApiOperation({ summary: 'Crear revisión individual (cambio de unidad, vacaciones, culminación de contrato)' })
-  @ApiResponse({ status: 201, description: 'Revisión individual creada exitosamente.' })
-  async createIndividualRevision(
-    @Param('ci') ci: string,
-    @Param('tipo') tipo: string,
-    @Res() res: Response
-  ) {
+  async createIndividualRevision(@Param('ci') ci: string, @Param('tipo') tipo: string, @Res() res: Response) {
     try {
       await this.personalService.createIndividualRevision(ci, tipo);
       return res.status(HttpStatus.CREATED).json({
@@ -158,16 +145,26 @@ export class PersonalController {
     }
   }
 
-  // Finalizar revisión
-  @Patch('finalizar-revision/:id')
-  @ApiOperation({ summary: 'Finalizar revisión' })
-  @ApiResponse({ status: 200, description: 'Revisión finalizada exitosamente.' })
-  async finalizeRevision(
-    @Param('id') id: number,
-    @Body('observaciones') observaciones: string, // Recibir observaciones desde el body
-    @Body('aprobado') aprobado: boolean, // Recibir si fue aprobado o no
-    @Res() res: Response,
+  @Patch('revision/:revisionId/persona/:personaId')
+  async evaluarPersona(
+    @Param('revisionId') revisionId: number,
+    @Param('personaId') personaId: number,
+    @Body('observaciones') observaciones: string,
+    @Body('aprobado') aprobado: boolean,
+    @Res() res: Response
   ) {
+    try {
+      await this.personalService.evaluarPersonaEnRevision(revisionId, personaId, observaciones, aprobado);
+      return res.status(HttpStatus.OK).json({
+        message: 'Evaluación de personal actualizada exitosamente',
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al evaluar al personal: ${error.message}`);
+    }
+  }
+
+  @Patch('finalizar-revision/:id')
+  async finalizeRevision(@Param('id') id: number, @Body('observaciones') observaciones: string, @Body('aprobado') aprobado: boolean, @Res() res: Response) {
     try {
       await this.personalService.finalizeRevision(id, observaciones, aprobado);
       return res.status(HttpStatus.OK).json({
@@ -178,10 +175,7 @@ export class PersonalController {
     }
   }
 
-  // Generar informe PDF de la revisión
   @Get('reporte-revision/:id')
-  @ApiOperation({ summary: 'Generar informe PDF de la revisión' })
-  @ApiResponse({ status: 200, description: 'Informe generado exitosamente.' })
   async generateRevisionReport(@Param('id') id: number, @Res() res: Response) {
     try {
       await this.personalService.generateRevisionReport(id);
@@ -192,40 +186,17 @@ export class PersonalController {
       throw new BadRequestException(`Error al generar el informe: ${error.message}`);
     }
   }
-  // En el archivo PersonalController.ts
-@Get('revision/:revisionId/personas')
-@ApiOperation({ summary: 'Obtener personal relacionado con la revisión' })
-@ApiResponse({ status: 200, description: 'Lista de personal relacionada con la revisión.' })
-async getPersonasByRevision(@Param('revisionId') revisionId: number, @Res() res: Response) {
-  try {
-    const personas = await this.personalService.getPersonasByRevision(revisionId);
-    return res.status(HttpStatus.OK).json({
-      message: 'Personal relacionado con la revisión obtenido exitosamente',
-      data: personas,
-    });
-  } catch (error) {
-    throw new BadRequestException(`Error al obtener el personal de la revisión: ${error.message}`);
-  }
-}
 
-@Patch('revision/:revisionId/persona/:personaId')
-@ApiOperation({ summary: 'Evaluar a un personal en la revisión' })
-@ApiResponse({ status: 200, description: 'Evaluación de personal actualizada exitosamente.' })
-async evaluarPersona(
-  @Param('revisionId') revisionId: number,
-  @Param('personaId') personaId: number,
-  @Body('observaciones') observaciones: string,
-  @Body('aprobado') aprobado: boolean,
-  @Res() res: Response
-) {
-  try {
-    await this.personalService.evaluarPersonaEnRevision(revisionId, personaId, observaciones, aprobado);
-    return res.status(HttpStatus.OK).json({
-      message: 'Evaluación de personal actualizada exitosamente',
-    });
-  } catch (error) {
-    throw new BadRequestException(`Error al evaluar al personal: ${error.message}`);
+  @Get('revision/:revisionId/personas')
+  async getPersonasByRevision(@Param('revisionId') revisionId: number, @Res() res: Response) {
+    try {
+      const personas = await this.personalService.getPersonasByRevision(revisionId);
+      return res.status(HttpStatus.OK).json({
+        message: 'Personal relacionado con la revisión obtenido exitosamente',
+        data: personas,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al obtener el personal de la revisión: ${error.message}`);
+    }
   }
-}
-
 }
