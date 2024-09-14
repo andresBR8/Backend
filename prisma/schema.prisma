@@ -301,6 +301,7 @@ model Revision {
   id             Int          @id @default(autoincrement())
   tipo           String       // "PERIODICA", "SORPRESA", "VACACIONES", "CAMBIO_UNIDAD", "CULMINACION_CONTRATO"
   fecha          DateTime     @default(now()) // Fecha en que se realizó la revisión
+  fechaCierre    DateTime     // Fecha/hora en que la revisión se cerrará automáticamente
   estado         String       // "PENDIENTE", "FINALIZADA"
   general        Boolean      @default(false) // Para diferenciar si es una revisión general (para todo el personal)
   fkPersonal     Int?         // Solo en caso de revisión individual
@@ -311,3 +312,4 @@ model Revision {
   @@map("revisiones")
   @@index([fkPersonal])
 }
+

@@ -1,4 +1,17 @@
-import { Controller, Get, Post, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException, Patch, Param, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Res,
+  Body,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PersonalService } from './personal.service';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -46,8 +59,27 @@ export class PersonalController {
       throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
     }
   }
+
+  // Endpoint para obtener la lista de revisiones
+  @Get('revisiones')
+  @ApiOperation({ summary: 'Obtener todas las revisiones' })
+  @ApiResponse({ status: 200, description: 'Lista de todas las revisiones' })
+  async findRevisiones(@Res() res: Response) {
+    try {
+      const revisiones = await this.personalService.findAllRevisiones();
+      return res.status(HttpStatus.OK).json({
+        message: 'Revisiones obtenidas exitosamente',
+        data: revisiones,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al obtener las revisiones: ${error.message}`);
+    }
+  }
+
   // Endpoint para inactivar manualmente personal
   @Patch('inactivate/:ci')
+  @ApiOperation({ summary: 'Inactivar personal' })
+  @ApiResponse({ status: 200, description: 'Personal inactivado correctamente.' })
   async inactivatePersonal(@Param('ci') ci: string, @Res() res: Response) {
     try {
       await this.personalService.inactivatePersonal(ci);
@@ -117,9 +149,9 @@ export class PersonalController {
   @ApiResponse({ status: 200, description: 'Revisión finalizada exitosamente.' })
   async finalizeRevision(
     @Param('id') id: number,
+    @Body('observaciones') observaciones: string, // Recibir observaciones desde el body
+    @Body('aprobado') aprobado: boolean, // Recibir si fue aprobado o no
     @Res() res: Response,
-    @UploadedFile() observaciones: string,
-    @UploadedFile() aprobado: boolean
   ) {
     try {
       await this.personalService.finalizeRevision(id, observaciones, aprobado);
