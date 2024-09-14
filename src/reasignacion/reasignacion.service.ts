@@ -170,130 +170,69 @@ export class ReasignacionService {
   }
 
   async getUltimaAsignacion(fkActivoUnidad: number): Promise<any> {
-    // Verificar si el activo está actualmente asignado
+    // Buscar el activo para obtener el `fkPersonalActual`
     const activo = await this.prisma.activoUnidad.findUnique({
-      where: {
-        id: fkActivoUnidad,
-        asignado: true, // Asegurarnos de que el activo esté asignado
+      where: { id: fkActivoUnidad },
+      select: {
+        id: true,
+        codigo: true,
+        fkPersonalActual: true,  // Obtener solo el fkPersonalActual
+        activoModelo: {
+          select: {
+            nombre: true,
+            descripcion: true,
+          },
+        },
+        estadoActual: true,
+        estadoCondicion: true,
       },
-      include: {
-        historialCambios: {
-          orderBy: {
-            fechaCambio: 'desc', // Obtener el cambio más reciente
-          },
-          include: {
-            asignacion: {
-              include: {
-                usuario: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-                personal: {
-                  select: {
-                    id: true,
-                    nombre: true,
-                    cargo: {
-                      select: {
-                        nombre: true,
-                      },
-                    },
-                    unidad: {
-                      select: {
-                        nombre: true,
-                      },
-                    },
-                  },
-                },
-                asignacionActivos: {
-                  include: {
-                    activoUnidad: {
-                      select: {
-                        id: true,
-                        codigo: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            reasignacion: {
-              include: {
-                usuarioNuevo: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-                personalNuevo: {
-                  select: {
-                    id: true,
-                    nombre: true,
-                    cargo: {
-                      select: {
-                        nombre: true,
-                      },
-                    },
-                    unidad: {
-                      select: {
-                        nombre: true,
-                      },
-                    },
-                  },
-                },
-                activoUnidad: {
-                  select: {
-                    id: true,
-                    codigo: true,
-                  },
-                },
-              },
-            },
-          },
+    });
+  
+    if (!activo) {
+      throw new NotFoundException('El activo no está asignado o no se encontró.');
+    }
+  
+    // Verificar si el activo tiene un `fkPersonalActual`
+    if (!activo.fkPersonalActual) {
+      throw new NotFoundException('El activo no tiene un personal asignado actualmente.');
+    }
+  
+    // Buscar el personal usando el `fkPersonalActual`
+    const personal = await this.prisma.personal.findUnique({
+      where: { id: activo.fkPersonalActual },
+      select: {
+        id: true,
+        nombre: true,
+        cargo: {
+          select: { nombre: true },
+        },
+        unidad: {
+          select: { nombre: true },
         },
       },
     });
   
-    // Validar si se encontró un activo que esté asignado
-    if (!activo || !activo.historialCambios.length) {
-      throw new NotFoundException('No se encontró una asignación o reasignación válida para este activo.');
+    if (!personal) {
+      throw new NotFoundException('El personal asignado no se encontró.');
     }
   
-    // Iterar sobre los cambios en el historial para encontrar la última asignación o reasignación
-    for (const cambio of activo.historialCambios) {
-      if (cambio.asignacion) {
-        return {
-          id: cambio.asignacion.id,
-          fecha: cambio.fechaCambio,
-          tipo: 'Asignación',
-          usuario: cambio.asignacion.usuario,
-          personal: cambio.asignacion.personal,
-          detalle: cambio.asignacion.detalle,
-          activoUnidad: cambio.asignacion.asignacionActivos.map((asignacionActivo) => ({
-            id: asignacionActivo.activoUnidad.id,
-            codigo: asignacionActivo.activoUnidad.codigo,
-          })),
-        };
-      } else if (cambio.reasignacion) {
-        return {
-          id: cambio.reasignacion.id,
-          fecha: cambio.fechaCambio,
-          tipo: 'Reasignación',
-          usuario: cambio.reasignacion.usuarioNuevo,
-          personal: cambio.reasignacion.personalNuevo,
-          detalle: cambio.reasignacion.detalle,
-          activoUnidad: {
-            id: cambio.reasignacion.activoUnidad.id,
-            codigo: cambio.reasignacion.activoUnidad.codigo,
-          },
-        };
-      }
-    }
-  
-    // Si no se encuentra ninguna asignación o reasignación
-    throw new NotFoundException('No se encontró una asignación o reasignación válida para este activo.');
+    // Devolver la información de la asignación actual
+    return {
+      id: activo.id,
+      codigo: activo.codigo,
+      modelo: activo.activoModelo.nombre,
+      descripcion: activo.activoModelo.descripcion,
+      personal: {
+        id: personal.id,
+        nombre: personal.nombre,
+        cargo: personal.cargo.nombre,
+        unidad: personal.unidad.nombre,
+      },
+      estadoActual: activo.estadoActual,
+      estadoCondicion: activo.estadoCondicion,
+    };
   }
+  
   
   
 }
