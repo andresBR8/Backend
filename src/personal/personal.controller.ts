@@ -192,4 +192,20 @@ export class PersonalController {
       throw new BadRequestException(`Error al generar el informe: ${error.message}`);
     }
   }
+  // En el archivo PersonalController.ts
+@Get('revision/:revisionId/personas')
+@ApiOperation({ summary: 'Obtener personal relacionado con la revisión' })
+@ApiResponse({ status: 200, description: 'Lista de personal relacionada con la revisión.' })
+async getPersonasByRevision(@Param('revisionId') revisionId: number, @Res() res: Response) {
+  try {
+    const personas = await this.personalService.getPersonasByRevision(revisionId);
+    return res.status(HttpStatus.OK).json({
+      message: 'Personal relacionado con la revisión obtenido exitosamente',
+      data: personas,
+    });
+  } catch (error) {
+    throw new BadRequestException(`Error al obtener el personal de la revisión: ${error.message}`);
+  }
+}
+
 }

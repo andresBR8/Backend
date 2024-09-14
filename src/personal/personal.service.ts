@@ -380,4 +380,29 @@ export class PersonalService {
 
     fileStream.end();
   }
+  // En el archivo PersonalService.ts
+async getPersonasByRevision(revisionId: number): Promise<any[]> {
+  const revision = await this.prisma.revision.findUnique({
+    where: { id: revisionId },
+  });
+
+  if (!revision) {
+    throw new NotFoundException('Revisión no encontrada.');
+  }
+
+  // Si es una revisión general, buscar todos los activos
+  if (revision.general) {
+    return await this.prisma.personal.findMany({
+      where: { activo: true }, // Solo personal activo
+      include: { cargo: true, unidad: true },
+    });
+  } else {
+    // Si es una revisión individual, devolver solo al personal específico
+    return await this.prisma.personal.findMany({
+      where: { id: revision.fkPersonal },
+      include: { cargo: true, unidad: true },
+    });
+  }
+}
+
 }
