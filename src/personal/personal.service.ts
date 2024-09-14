@@ -404,5 +404,43 @@ async getPersonasByRevision(revisionId: number): Promise<any[]> {
     });
   }
 }
+async evaluarPersonaEnRevision(
+  revisionId: number,
+  personaId: number,
+  observaciones: string,
+  aprobado: boolean
+): Promise<void> {
+  // Buscar la revisión por ID
+  const revision = await this.prisma.revision.findUnique({ where: { id: revisionId } });
+
+  if (!revision) {
+    throw new NotFoundException('Revisión no encontrada.');
+  }
+
+  // Buscar el personal por ID
+  const persona = await this.prisma.personal.findUnique({ where: { id: personaId } });
+
+  if (!persona) {
+    throw new NotFoundException('Personal no encontrado.');
+  }
+
+  // Guardar o actualizar la evaluación del personal en la revisión
+  await this.prisma.revisionPersonal.upsert({
+    where: {
+      fkRevision_fkPersonal: { fkRevision: revisionId, fkPersonal: personaId },  // Usamos la clave compuesta
+    },
+    update: {  // Si ya existe, actualiza la evaluación
+      observaciones,
+      aprobado,
+    },
+    create: {  // Si no existe, crea una nueva entrada
+      fkRevision: revisionId,
+      fkPersonal: personaId,
+      observaciones,
+      aprobado,
+    },
+  });
+}
+
 
 }

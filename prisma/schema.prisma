@@ -333,5 +333,9 @@ model RevisionPersonal {
   @@map("revision_personal")
   @@index([fkRevision])
   @@index([fkPersonal])
+  
+  // Definir una clave compuesta para fkRevision y fkPersonal
+  @@unique([fkRevision, fkPersonal])
 }
+
 

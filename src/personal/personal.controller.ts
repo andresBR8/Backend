@@ -208,4 +208,24 @@ async getPersonasByRevision(@Param('revisionId') revisionId: number, @Res() res:
   }
 }
 
+@Patch('revision/:revisionId/persona/:personaId')
+@ApiOperation({ summary: 'Evaluar a un personal en la revisión' })
+@ApiResponse({ status: 200, description: 'Evaluación de personal actualizada exitosamente.' })
+async evaluarPersona(
+  @Param('revisionId') revisionId: number,
+  @Param('personaId') personaId: number,
+  @Body('observaciones') observaciones: string,
+  @Body('aprobado') aprobado: boolean,
+  @Res() res: Response
+) {
+  try {
+    await this.personalService.evaluarPersonaEnRevision(revisionId, personaId, observaciones, aprobado);
+    return res.status(HttpStatus.OK).json({
+      message: 'Evaluación de personal actualizada exitosamente',
+    });
+  } catch (error) {
+    throw new BadRequestException(`Error al evaluar al personal: ${error.message}`);
+  }
+}
+
 }
