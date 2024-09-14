@@ -60,7 +60,7 @@ export class PersonalController {
     }
   }
   // Endpoint para obtener la lista de personal
-  @Get('2')
+  @Get('all')
   @ApiOperation({ summary: 'Obtener todos los personales' })
   @ApiResponse({ status: 200, description: 'Lista de todos los personales' })
   async findAll2(@Res() res: Response) {
