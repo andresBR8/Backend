@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma.service';
 import { Personal, Cargo, Unidad } from '@prisma/client';
 import * as csvParser from 'csv-parser';
 import { Readable } from 'stream';
+import { createWriteStream } from 'fs';
 
 @Injectable()
 export class PersonalService {
@@ -230,5 +231,112 @@ export class PersonalService {
     });
 
     return personales;
+  }
+  // Crear revisión periódica el 20 de diciembre
+  async createPeriodicRevision(): Promise<void> {
+    const fechaRevision = new Date();
+    const tipo = 'PERIODICA';
+    const estado = 'PENDIENTE';
+
+    // Crear una revisión general para todos los personales activos
+    const personalesActivos = await this.prisma.personal.findMany({
+      where: { activo: true },
+    });
+
+    for (const personal of personalesActivos) {
+      await this.prisma.revision.create({
+        data: {
+          tipo,
+          fecha: fechaRevision,
+          estado,
+          general: true,
+          aprobado: false,
+        },
+      });
+    }
+  }
+
+  // Crear revisión sorpresa en cualquier momento
+  async createSurpriseRevision(): Promise<void> {
+    const fechaRevision = new Date();
+    const tipo = 'SORPRESA';
+    const estado = 'PENDIENTE';
+
+    // Crear una revisión general para todos los personales activos
+    const personalesActivos = await this.prisma.personal.findMany({
+      where: { activo: true },
+    });
+
+    for (const personal of personalesActivos) {
+      await this.prisma.revision.create({
+        data: {
+          tipo,
+          fecha: fechaRevision,
+          estado,
+          general: true,
+          aprobado: false,
+        },
+      });
+    }
+  }
+
+  // Crear revisión individual por cambio de unidad, vacaciones o culminación de contrato
+  async createIndividualRevision(ci: string, tipo: string): Promise<void> {
+    const fechaRevision = new Date();
+    const personal = await this.prisma.personal.findUnique({ where: { ci } });
+
+    if (!personal) {
+      throw new NotFoundException('Personal no encontrado.');
+    }
+
+    await this.prisma.revision.create({
+      data: {
+        tipo,
+        fecha: fechaRevision,
+        estado: 'PENDIENTE',
+        general: false,
+        fkPersonal: personal.id,
+        aprobado: false,
+      },
+    });
+  }
+
+  // Marcar revisión como finalizada
+  async finalizeRevision(id: number, observaciones: string, aprobado: boolean): Promise<void> {
+    await this.prisma.revision.update({
+      where: { id },
+      data: {
+        estado: 'FINALIZADA',
+        observaciones,
+        aprobado,
+      },
+    });
+  }
+
+  // Generar un informe PDF de la revisión
+  async generateRevisionReport(revisionId: number): Promise<void> {
+    const revision = await this.prisma.revision.findUnique({
+      where: { id: revisionId },
+      include: { personal: true },
+    });
+
+    if (!revision) {
+      throw new NotFoundException('Revisión no encontrada.');
+    }
+
+    // Generar PDF (Ejemplo básico, puedes personalizarlo)
+    const filePath = `./revisiones/report_${revisionId}.pdf`;
+    const fileStream = createWriteStream(filePath);
+
+    fileStream.write(`Reporte de Revisión - ID: ${revisionId}\n`);
+    fileStream.write(`Tipo de Revisión: ${revision.tipo}\n`);
+    fileStream.write(`Fecha: ${revision.fecha}\n`);
+    if (revision.personal) {
+      fileStream.write(`Personal: ${revision.personal.nombre} - CI: ${revision.personal.ci}\n`);
+    }
+    fileStream.write(`Estado: ${revision.aprobado ? 'Aprobado' : 'No Aprobado'}\n`);
+    fileStream.write(`Observaciones: ${revision.observaciones}\n`);
+
+    fileStream.end();
   }
 }
