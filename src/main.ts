@@ -32,7 +32,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: allowedOrigins,  // Permitir ambos orígenes
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Métodos permitidos
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], // Métodos permitidos
     credentials: true,  // Habilitar envío de credenciales
   });
 
