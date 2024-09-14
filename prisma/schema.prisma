@@ -42,6 +42,7 @@ model Personal {
   devoluciones             Devolucion[]
   historialCargosUnidades  HistorialCargoUnidad[]
   revisiones              Revision[]
+  revisionesPersonales    RevisionPersonal[]
 
   @@map("personal")
   @@index([fkCargo])
@@ -297,6 +298,7 @@ model Devolucion {
   @@index([fkUsuario])
   @@index([fkActivoUnidad])
 }
+
 model Revision {
   id             Int          @id @default(autoincrement())
   tipo           String       // "PERIODICA", "SORPRESA", "VACACIONES", "CAMBIO_UNIDAD", "CULMINACION_CONTRATO"
@@ -304,12 +306,32 @@ model Revision {
   fechaCierre    DateTime     // Fecha/hora en que la revisión se cerrará automáticamente
   estado         String       // "PENDIENTE", "FINALIZADA"
   general        Boolean      @default(false) // Para diferenciar si es una revisión general (para todo el personal)
-  fkPersonal     Int?         // Solo en caso de revisión individual
   observaciones  String?
   aprobado       Boolean      @default(false) // Si la solvencia fue aprobada
-  personal       Personal?    @relation(fields: [fkPersonal], references: [id]) // Nullable, ya que las revisiones generales no tienen un personal específico
+  
+  // Relación a personal solo si es una revisión individual
+  fkPersonal     Int?         // Solo en caso de revisión individual
+  personal       Personal?    @relation(fields: [fkPersonal], references: [id]) 
+
+  // Relación con el nuevo modelo RevisionPersonal
+  detalles       RevisionPersonal[]  // Relación con el modelo que guarda los detalles de cada personal en revisiones generales e individuales
 
   @@map("revisiones")
+  @@index([fkPersonal])
+}
+
+model RevisionPersonal {
+  id             Int      @id @default(autoincrement())
+  fkRevision     Int      // Relación a la revisión general o individual
+  fkPersonal     Int      // Relación a cada personal involucrado en la revisión
+  aprobado       Boolean  // Si fue aprobado
+  observaciones  String?  // Observaciones específicas
+
+  personal       Personal @relation(fields: [fkPersonal], references: [id])
+  revision       Revision @relation(fields: [fkRevision], references: [id])
+
+  @@map("revision_personal")
+  @@index([fkRevision])
   @@index([fkPersonal])
 }
 

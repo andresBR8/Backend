@@ -232,8 +232,19 @@ export class PersonalService {
 
     return personales;
   }
+  // Obtener todos los personales y sus activos
+  async findAll2(): Promise<any[]> {
+    const personales = await this.prisma.personal.findMany({
+      include: {
+        cargo: true,
+        unidad: true,
+      },
+    });
+
+    return personales;
+  }
    // Crear revisión periódica (20 de diciembre)
-   async createPeriodicRevision(): Promise<void> {
+  async createPeriodicRevision(): Promise<void> {
     const fechaRevision = new Date();
     const fechaCierre = new Date(fechaRevision);
     fechaCierre.setHours(fechaCierre.getHours() + 24); // Cierre en 24 horas
@@ -241,72 +252,53 @@ export class PersonalService {
     const tipo = 'PERIODICA';
     const estado = 'PENDIENTE';
 
-    const personalesActivos = await this.prisma.personal.findMany({
-      where: { activo: true },
-    });
-
-    for (const personal of personalesActivos) {
-      await this.prisma.revision.create({
-        data: {
-          tipo,
-          fecha: fechaRevision,
-          fechaCierre, // Establecer la fecha de cierre
-          estado,
-          general: true,
-          aprobado: false,
-        },
-      });
-    }
-  }
-
-  // Crear revisión sorpresa (no almacenar fkPersonal, ya que es general)
-async createSurpriseRevision(): Promise<void> {
-  const fechaRevision = new Date();
-  const fechaCierre = new Date(fechaRevision);
-  fechaCierre.setHours(fechaCierre.getHours() + 24); // Cierre en 24 horas
-
-  const tipo = 'SORPRESA';
-  const estado = 'PENDIENTE';
-
-  // Buscar solamente el personal activo
-  const personalesActivos = await this.prisma.personal.findMany({
-    where: { activo: true }, // Solo personal activo
-  });
-
-  for (const personal of personalesActivos) {
-    // Crear una revisión general para todos los personales activos, sin guardar el fkPersonal
     await this.prisma.revision.create({
       data: {
         tipo,
         fecha: fechaRevision,
-        fechaCierre, // Establecer la fecha de cierre
+        fechaCierre,
         estado,
         general: true,
         aprobado: false,
-        // Nota: Aquí el fkPersonal se queda como null porque es una revisión general
       },
     });
   }
-}
 
+  // Crear revisión sorpresa (no almacenar fkPersonal, ya que es general)
+  async createSurpriseRevision(): Promise<void> {
+    const fechaRevision = new Date();
+    const fechaCierre = new Date(fechaRevision);
+    fechaCierre.setHours(fechaCierre.getHours() + 24); // Cierre en 24 horas
+
+    await this.prisma.revision.create({
+      data: {
+        tipo: 'SORPRESA',
+        fecha: fechaRevision,
+        fechaCierre,
+        estado: 'PENDIENTE',
+        general: true,
+        aprobado: false,
+      },
+    });
+  }
 
   // Crear revisión individual (vacaciones, cambio de unidad, culminación de contrato)
   async createIndividualRevision(ci: string, tipo: string): Promise<void> {
-    const fechaRevision = new Date();
-    const fechaCierre = new Date(fechaRevision);
-    fechaCierre.setHours(fechaCierre.getHours() + 2); // Cierre en 2 horas
-
     const personal = await this.prisma.personal.findUnique({ where: { ci } });
 
     if (!personal) {
       throw new NotFoundException('Personal no encontrado.');
     }
 
+    const fechaRevision = new Date();
+    const fechaCierre = new Date(fechaRevision);
+    fechaCierre.setHours(fechaCierre.getHours() + 2); // Cierre en 2 horas
+
     await this.prisma.revision.create({
       data: {
         tipo,
         fecha: fechaRevision,
-        fechaCierre, // Establecer la fecha de cierre
+        fechaCierre,
         estado: 'PENDIENTE',
         general: false,
         fkPersonal: personal.id,
@@ -317,12 +309,9 @@ async createSurpriseRevision(): Promise<void> {
 
   // Obtener todas las revisiones (pendientes o finalizadas)
   async findAllRevisiones(): Promise<any[]> {
-    const revisiones = await this.prisma.revision.findMany({
-      include: {
-        personal: true, // Solo si es una revisión individual
-      },
+    return await this.prisma.revision.findMany({
+      include: { personal: true }, // Solo si es una revisión individual
     });
-    return revisiones;
   }
 
   // Marcar revisión como finalizada
@@ -346,16 +335,13 @@ async createSurpriseRevision(): Promise<void> {
   // Función que finaliza automáticamente las revisiones cuando se cumple la fecha de cierre
   async autoFinalizeRevisions(): Promise<void> {
     const revisionesPendientes = await this.prisma.revision.findMany({
-      where: {
-        estado: 'PENDIENTE',
-      },
+      where: { estado: 'PENDIENTE' },
     });
 
     const fechaActual = new Date();
 
     for (const revision of revisionesPendientes) {
       if (fechaActual >= revision.fechaCierre) {
-        // Si la revisión está vencida y no ha sido finalizada, se finaliza sin aprobación ni observaciones
         await this.prisma.revision.update({
           where: { id: revision.id },
           data: {
