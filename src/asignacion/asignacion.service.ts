@@ -40,7 +40,7 @@ export class AsignacionService {
       }
     }
   
-    // Si todas las validaciones fueron exitosas, crear la asignación principal
+    // Crear la asignación principal
     const asignacion = await this.prisma.asignacion.create({
       data: {
         fkUsuario,
@@ -49,6 +49,33 @@ export class AsignacionService {
         fechaAsignacion: new Date(fechaAsignacion),
         detalle,
       },
+      include: {
+        usuario: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            name: true,
+          },
+        },
+        personal: {
+          select: {
+            nombre: true,
+            ci: true,
+            cargo: {
+              select: { nombre: true }
+            },
+            unidad: {
+              select: { nombre: true }
+            }
+          }
+        },
+        asignacionActivos: {
+          include: {
+            activoUnidad: true,
+          }
+        }
+      }
     });
   
     // Actualizar cada unidad y registrar en el historial
@@ -76,7 +103,7 @@ export class AsignacionService {
         await this.prisma.historialCambio.create({
           data: {
             fkActivoUnidad: unidadId,
-            fkAsignacion: asignacion.id, // Se añade la relación a la asignación
+            fkAsignacion: asignacion.id,
             tipoCambio: 'ASIGNACION',
             detalle: `Unidad asignada a ${personal.nombre}`,
             fechaCambio: new Date(),
@@ -85,9 +112,60 @@ export class AsignacionService {
       }
     }
   
+    // Enviar notificación a los roles 'Administrador' y 'Encargado'
+    const notificationData = {
+      title: 'Nueva Asignación Realizada',
+      message: `Se ha realizado una nueva asignación para ${personal.nombre}.`,
+      asignacionId: asignacion.id,
+    };
+    this.notificationsService.sendRoleSpecificNotification('nuevaAsignacion', notificationData, ['Administrador', 'Encargado']);
+  
+    // Formatear la notificación general con el mismo formato que proporcionaste
+    const generalNotificationData = {
+      id: asignacion.id,
+      fkUsuario: asignacion.usuario.id,
+      fkPersonal: asignacion.personal.ci,
+      avalAsignacion: asignacion.avalAsignacion,
+      fechaAsignacion: asignacion.fechaAsignacion,
+      detalle: asignacion.detalle,
+      usuario: {
+        id: asignacion.usuario.id,
+        username: asignacion.usuario.username,
+        email: asignacion.usuario.email,
+        name: asignacion.usuario.name,
+      },
+      personal: {
+        nombre: asignacion.personal.nombre,
+        ci: asignacion.personal.ci,
+        cargo: {
+          nombre: asignacion.personal.cargo.nombre,
+        },
+        unidad: {
+          nombre: asignacion.personal.unidad.nombre,
+        },
+      },
+      asignacionActivos: asignacion.asignacionActivos.map((activo) => ({
+        id: activo.id,
+        fkAsignacion: activo.fkAsignacion,
+        fkActivoUnidad: activo.fkActivoUnidad,
+        activoUnidad: {
+          id: activo.activoUnidad.id,
+          fkActivoModelo: activo.activoUnidad.fkActivoModelo,
+          codigo: activo.activoUnidad.codigo,
+          asignado: activo.activoUnidad.asignado,
+          costoActual: activo.activoUnidad.costoActual,
+          estadoActual: activo.activoUnidad.estadoActual,
+          estadoCondicion: activo.activoUnidad.estadoCondicion,
+          fkPersonalActual: activo.activoUnidad.fkPersonalActual,
+        },
+      })),
+    };
+  
+    this.notificationsService.sendGeneralNotification('activo-modelo-changed', generalNotificationData);
   
     return { message: 'Asignación realizada correctamente' };
   }
+  
   
   // Función para obtener todas las asignaciones
   async getAsignaciones(): Promise<Asignacion[]> {
