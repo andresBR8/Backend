@@ -37,7 +37,7 @@ export class DepreciacionController {
     return this.depreciacionService.obtenerDepreciacionPorAñoYMetodo(parsedAño, metodo as MetodoDepreciacion);
   }
 
-  @Get('año-actual')
+  @Get('actual')
   async obtenerDepreciacionAñoActual() {
     return this.depreciacionService.obtenerDepreciacionAñoActual();
   }
