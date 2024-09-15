@@ -2,11 +2,15 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma.service';
 import { Baja, BajaEstado } from '@prisma/client';
 import { CreateBajaDto } from './dto/create-baja.dto';
+import { NotificationsService } from '../notificaciones/notificaciones.service';
 
 @Injectable()
 export class BajaService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
+  // Crear una nueva baja
   // Crear una nueva baja
   async createBaja(createBajaDto: CreateBajaDto, role: string): Promise<Baja> {
     const { fkActivoUnidad, fecha, motivo } = createBajaDto;
@@ -73,6 +77,14 @@ export class BajaService {
             fechaCambio: new Date(),
           },
         });
+
+        // Enviar notificación al administrador sobre la nueva solicitud de baja
+        const notificationData = {
+          title: 'Nueva Solicitud de Baja',
+          message: `El encargado ha solicitado la baja del activo ${activo.codigo}.`,
+          bajaId: nuevaBaja.id,
+        };
+        this.notificationsService.sendRoleSpecificNotification('nuevaBaja', notificationData, ['Administrador']);
       }
 
       return nuevaBaja;
@@ -81,28 +93,7 @@ export class BajaService {
     return baja;
   }
 
-  // Obtener todas las bajas
-  async getBajas(): Promise<Baja[]> {
-    return this.prisma.baja.findMany({
-      include: { activoUnidad: true },
-    });
-  }
-
-  // Obtener una baja por su ID
-  async getBajaById(id: number): Promise<Baja | null> {
-    const baja = await this.prisma.baja.findUnique({
-      where: { id },
-      include: { activoUnidad: true },
-    });
-
-    if (!baja) {
-      throw new NotFoundException('Baja no encontrada');
-    }
-
-    return baja;
-  }
-
-  // Aprobar una baja pendiente
+  // Aprobar o rechazar una baja pendiente
   async aprobarBaja(id: number, role: string, aprobar: boolean): Promise<Baja> {
     const baja = await this.prisma.baja.findUnique({
       where: { id },
@@ -149,6 +140,14 @@ export class BajaService {
           fechaCambio: new Date(),
         },
       });
+
+      // Enviar notificación al encargado que solicitó la baja
+      const notificationData = {
+        title: 'Baja Aprobada',
+        message: `La baja del activo ha sido aprobada por el administrador.`,
+        bajaId: baja.id,
+      };
+      this.notificationsService.sendRoleSpecificNotification('bajaAprobada', notificationData, ['Encargado']);
     } else {
       // Registrar en el historial de cambios en caso de rechazo
       await this.prisma.historialCambio.create({
@@ -159,8 +158,37 @@ export class BajaService {
           fechaCambio: new Date(),
         },
       });
+
+      // Enviar notificación al encargado que solicitó la baja sobre el rechazo
+      const notificationData = {
+        title: 'Baja Rechazada',
+        message: `La baja del activo ha sido rechazada por el administrador.`,
+        bajaId: baja.id,
+      };
+      this.notificationsService.sendRoleSpecificNotification('bajaRechazada', notificationData, ['Encargado']);
     }
 
     return bajaActualizada;
+  }
+
+  // Obtener todas las bajas
+  async getBajas(): Promise<Baja[]> {
+    return this.prisma.baja.findMany({
+      include: { activoUnidad: true },
+    });
+  }
+
+  // Obtener una baja por su ID
+  async getBajaById(id: number): Promise<Baja | null> {
+    const baja = await this.prisma.baja.findUnique({
+      where: { id },
+      include: { activoUnidad: true },
+    });
+
+    if (!baja) {
+      throw new NotFoundException('Baja no encontrada');
+    }
+
+    return baja;
   }
 }

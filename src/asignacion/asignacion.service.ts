@@ -115,10 +115,10 @@ export class AsignacionService {
     // Enviar notificación a los roles 'Administrador' y 'Encargado'
     const notificationData = {
       title: 'Nueva Asignación Realizada',
-      message: `Se ha realizado una nueva asignación para ${personal.nombre}.`,
+      message: `Se ha realizado una nueva asignación para ${personal.nombre} por el usuario ${usuario.name}.`,
       asignacionId: asignacion.id,
     };
-    this.notificationsService.sendRoleSpecificNotification('nuevaAsignacion', notificationData, ['Administrador', 'Encargado']);
+    this.notificationsService.sendRoleSpecificNotification('nuevaAsignacion', notificationData, ['Administrador', 'Encargado'],);
   
     // Formatear la notificación general con el mismo formato que proporcionaste
     const generalNotificationData = {
