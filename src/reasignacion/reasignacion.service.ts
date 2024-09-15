@@ -216,21 +216,81 @@ export class ReasignacionService {
       throw new NotFoundException('El personal asignado no se encontró.');
     }
   
-    // Devolver la información de la asignación actual
-    return {
-      id: activo.id,
-      codigo: activo.codigo,
-      modelo: activo.activoModelo.nombre,
-      descripcion: activo.activoModelo.descripcion,
-      personal: {
-        id: personal.id,
-        nombre: personal.nombre,
-        cargo: personal.cargo.nombre,
-        unidad: personal.unidad.nombre,
+    // Obtener el historial más reciente (asignación o reasignación)
+    const ultimoCambio = await this.prisma.historialCambio.findFirst({
+      where: { fkActivoUnidad },
+      orderBy: { fechaCambio: 'desc' },
+      include: {
+        asignacion: {
+          include: {
+            usuario: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        reasignacion: {
+          include: {
+            usuarioNuevo: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       },
-      estadoActual: activo.estadoActual,
-      estadoCondicion: activo.estadoCondicion,
-    };
+    });
+  
+    if (!ultimoCambio) {
+      throw new NotFoundException('No se encontró una asignación o reasignación válida para este activo.');
+    }
+  
+    // Verificar si es una asignación o reasignación y devolver los detalles correspondientes
+    if (ultimoCambio.asignacion) {
+      return {
+        id: ultimoCambio.asignacion.id,
+        fecha: ultimoCambio.fechaCambio,
+        tipo: 'Asignación',
+        usuario: ultimoCambio.asignacion.usuario,
+        personal: {
+          id: personal.id,
+          nombre: personal.nombre,
+          cargo: personal.cargo.nombre,
+          unidad: personal.unidad.nombre,
+        },
+        detalle: ultimoCambio.asignacion.detalle,
+        activoUnidad: {
+          id: activo.id,
+          codigo: activo.codigo,
+          modelo: activo.activoModelo.nombre,
+          descripcion: activo.activoModelo.descripcion,
+          estadoActual: activo.estadoActual,
+          estadoCondicion: activo.estadoCondicion,
+        },
+      };
+    } else if (ultimoCambio.reasignacion) {
+      return {
+        id: ultimoCambio.reasignacion.id,
+        fecha: ultimoCambio.fechaCambio,
+        tipo: 'Reasignación',
+        usuario: ultimoCambio.reasignacion.usuarioNuevo,
+        personal: {
+          id: personal.id,
+          nombre: personal.nombre,
+          cargo: personal.cargo.nombre,
+          unidad: personal.unidad.nombre,
+        },
+        detalle: ultimoCambio.reasignacion.detalle,
+        activoUnidad: {
+          id: activo.id,
+          codigo: activo.codigo,
+          modelo: activo.activoModelo.nombre,
+          descripcion: activo.activoModelo.descripcion,
+          estadoActual: activo.estadoActual,
+          estadoCondicion: activo.estadoCondicion,
+        },
+      };
+    }
+  
+    // Si no se encuentra ninguna asignación o reasignación
+    throw new NotFoundException('No se encontró una asignación o reasignación válida para este activo.');
   }
   
   
