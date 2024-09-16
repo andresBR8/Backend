@@ -181,10 +181,19 @@ export class ReasignacionService {
           select: {
             nombre: true,
             descripcion: true,
+            fechaIngreso: true, // Fecha de ingreso del activo modelo
+            costo: true, // Costo original
+            partida: { // Información de la partida (vida útil y depreciación)
+              select: {
+                vidaUtil: true,
+                porcentajeDepreciacion: true,
+              },
+            },
           },
         },
         estadoActual: true,
         estadoCondicion: true,
+        costoActual: true, // Costo actual del activo unidad
       },
     });
   
@@ -242,6 +251,21 @@ export class ReasignacionService {
       throw new NotFoundException('No se encontró una asignación o reasignación válida para este activo.');
     }
   
+    // Construir la respuesta con detalles del activoModelo y activoUnidad
+    const activoDetalles = {
+      id: activo.id,
+      codigo: activo.codigo,
+      modelo: activo.activoModelo.nombre,
+      descripcion: activo.activoModelo.descripcion,
+      fechaIngreso: activo.activoModelo.fechaIngreso,
+      costo: activo.activoModelo.costo,
+      vidaUtil: activo.activoModelo.partida?.vidaUtil,
+      porcentajeDepreciacion: activo.activoModelo.partida?.porcentajeDepreciacion,
+      estadoActual: activo.estadoActual,
+      estadoCondicion: activo.estadoCondicion,
+      costoActual: activo.costoActual,
+    };
+  
     // Verificar si es una asignación o reasignación y devolver los detalles correspondientes
     if (ultimoCambio.asignacion) {
       return {
@@ -256,14 +280,7 @@ export class ReasignacionService {
           unidad: personal.unidad.nombre,
         },
         detalle: ultimoCambio.asignacion.detalle,
-        activoUnidad: {
-          id: activo.id,
-          codigo: activo.codigo,
-          modelo: activo.activoModelo.nombre,
-          descripcion: activo.activoModelo.descripcion,
-          estadoActual: activo.estadoActual,
-          estadoCondicion: activo.estadoCondicion,
-        },
+        activoUnidad: activoDetalles, // Incluye detalles del activoModelo y activoUnidad
       };
     } else if (ultimoCambio.reasignacion) {
       return {
@@ -278,20 +295,14 @@ export class ReasignacionService {
           unidad: personal.unidad.nombre,
         },
         detalle: ultimoCambio.reasignacion.detalle,
-        activoUnidad: {
-          id: activo.id,
-          codigo: activo.codigo,
-          modelo: activo.activoModelo.nombre,
-          descripcion: activo.activoModelo.descripcion,
-          estadoActual: activo.estadoActual,
-          estadoCondicion: activo.estadoCondicion,
-        },
+        activoUnidad: activoDetalles, // Incluye detalles del activoModelo y activoUnidad
       };
     }
   
     // Si no se encuentra ninguna asignación o reasignación
     throw new NotFoundException('No se encontró una asignación o reasignación válida para este activo.');
   }
+  
   
   
   
