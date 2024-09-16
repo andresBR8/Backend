@@ -200,89 +200,64 @@ export class PersonalService {
       data: { activo: false },
     });
   }
-
   // Obtener todos los personales y sus activos
-  async findAll(): Promise<any[]> {
-    const personales = await this.prisma.personal.findMany({
-      include: {
-        cargo: true,
-        unidad: true,
-        asignaciones: {
-          select: {
-            id: true,
-            asignacionActivos: {
-              select: {
-                activoUnidad: {
-                  select: {
-                    id: true,
-                    codigo: true,
-                    estadoActual: true,
-                    estadoCondicion: true,
-                    activoModelo: {
-                      select: { nombre: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
+  // Obtener la lista de personal con sus cargos y unidades (activos e inactivos)
+// Obtener la lista de personal con sus cargos y unidades (activos e inactivos)
+async findAll(): Promise<any[]> {
+  const personales = await this.prisma.personal.findMany({
+    select: {
+      id: true,               // ID del personal
+      nombre: true,           // Nombre del personal
+      ci: true,               // CI
+      activo: true,           // Estado activo/inactivo
+      cargo: {                // Cargo relacionado
+        select: {
+          id: true,           // ID del cargo
+          nombre: true,       // Nombre del cargo
         },
       },
-    });
+      unidad: {               // Unidad relacionada
+        select: {
+          id: true,           // ID de la unidad
+          nombre: true,       // Nombre de la unidad
+        },
+      },
+    },
+  });
 
-    return personales;
-  }
-  // Obtener todos los personales y sus activos
-  async findAll2(): Promise<any[]> {
-    const personales = await this.prisma.personal.findMany({
-      select: {
-        id: true,               // Devuelve el ID del personal
-        nombre: true,           // Devuelve el nombre del personal
-        ci: true,               // Devuelve el CI
-        activo: true,           // Incluye si el personal está activo o inactivo
-        cargo: {                // Incluye el cargo relacionado
-          select: {
-            id: true,           // Devuelve el ID del cargo
-            nombre: true,       // Devuelve el nombre del cargo
-          },
-        },
-        unidad: {               // Incluye la unidad relacionada
-          select: {
-            id: true,           // Devuelve el ID de la unidad
-            nombre: true,       // Devuelve el nombre de la unidad
-          },
+  return personales; // Devuelve solo los campos seleccionados
+}
+
+
+  
+  // Obtener la lista de personal activo con solo los campos seleccionados
+async findAllActive(): Promise<any[]> {
+  const personales = await this.prisma.personal.findMany({
+    where: {
+      activo: true,  // Solo personal activo
+    },
+    select: {
+      id: true,               // ID del personal
+      nombre: true,           // Nombre del personal
+      ci: true,               // CI
+      cargo: {                // Cargo relacionado
+        select: {
+          id: true,           // ID del cargo
+          nombre: true,       // Nombre del cargo
         },
       },
-    });
-  
-    return personales; // Devuelve la lista con los campos seleccionados
-  }
-  
-  // Obtener todos los personales activos y sus activos
-  async findAll3(): Promise<any[]> {
-    const personales = await this.prisma.personal.findMany({
-      where: { activo: true }, // Solo el personal activo
-      select: {
-        id: true,               // Devuelve el ID del personal
-        nombre: true,           // Devuelve el nombre del personal
-        ci: true,               // Devuelve el CI
-        cargo: {                // Incluye el cargo relacionado
-          select: {
-            id: true,           // Devuelve el ID del cargo
-            nombre: true,       // Devuelve el nombre del cargo
-          },
-        },
-        unidad: {               // Incluye la unidad relacionada
-          select: {
-            id: true,           // Devuelve el ID de la unidad
-            nombre: true,       // Devuelve el nombre de la unidad
-          },
+      unidad: {               // Unidad relacionada
+        select: {
+          id: true,           // ID de la unidad
+          nombre: true,       // Nombre de la unidad
         },
       },
-    });
-  
-    return personales; // Devuelve la lista con los campos seleccionados
-  }
+    },
+  });
+
+  return personales; // Devuelve solo los campos seleccionados
+}
+
   
    // Crear revisión periódica (20 de diciembre)
   async createPeriodicRevision(): Promise<void> {

@@ -44,51 +44,38 @@ export class PersonalController {
     }
   }
 
-  // Endpoint para obtener la lista de personal
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los personales' })
-  @ApiResponse({ status: 200, description: 'Lista de todos los personales' })
-  async findAll(@Res() res: Response) {
-    try {
-      const personales = await this.personalService.findAll();
-      return res.status(HttpStatus.OK).json({
-        message: 'Personales obtenidos exitosamente',
-        data: personales,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
-    }
+@ApiOperation({ summary: 'Obtener todos los personales' })
+@ApiResponse({ status: 200, description: 'Lista de todos los personales' })
+async findAll(@Res() res: Response) {
+  try {
+    const personales = await this.personalService.findAll();
+    return res.status(HttpStatus.OK).json({
+      message: 'Personales obtenidos exitosamente',
+      data: personales,
+    });
+  } catch (error) {
+    throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
   }
-  // Endpoint para obtener la lista de personal
-  @Get('all')
-  @ApiOperation({ summary: 'Obtener todos los personales' })
-  @ApiResponse({ status: 200, description: 'Lista de todos los personales' })
-  async findAll2(@Res() res: Response) {
-    try {
-      const personales = await this.personalService.findAll();
-      return res.status(HttpStatus.OK).json({
-        message: 'Personales obtenidos exitosamente',
-        data: personales,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
-    }
-  }
+}
+
+  
   // Endpoint para obtener la lista de personal
   @Get('activos')
-  @ApiOperation({ summary: 'Obtener todos los personales' })
-  @ApiResponse({ status: 200, description: 'Lista de todos los personales' })
-  async findAll3(@Res() res: Response) {
-    try {
-      const personales = await this.personalService.findAll();
-      return res.status(HttpStatus.OK).json({
-        message: 'Personales obtenidos exitosamente',
-        data: personales,
-      });
-    } catch (error) {
-      throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
-    }
+@ApiOperation({ summary: 'Obtener solo el personal activo' })
+@ApiResponse({ status: 200, description: 'Lista de personal activo' })
+async findAllActive(@Res() res: Response) {
+  try {
+    const personales = await this.personalService.findAllActive();
+    return res.status(HttpStatus.OK).json({
+      message: 'Personales activos obtenidos exitosamente',
+      data: personales,
+    });
+  } catch (error) {
+    throw new BadRequestException(`Error al obtener el personal activo: ${error.message}`);
   }
+}
+
 
   // Endpoint para obtener la lista de revisiones
   @Get('revisiones')
