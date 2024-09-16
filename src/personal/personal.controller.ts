@@ -74,6 +74,21 @@ export class PersonalController {
       throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
     }
   }
+  // Endpoint para obtener la lista de personal
+  @Get('activos')
+  @ApiOperation({ summary: 'Obtener todos los personales' })
+  @ApiResponse({ status: 200, description: 'Lista de todos los personales' })
+  async findAll3(@Res() res: Response) {
+    try {
+      const personales = await this.personalService.findAll();
+      return res.status(HttpStatus.OK).json({
+        message: 'Personales obtenidos exitosamente',
+        data: personales,
+      });
+    } catch (error) {
+      throw new BadRequestException(`Error al obtener los personales: ${error.message}`);
+    }
+  }
 
   // Endpoint para obtener la lista de revisiones
   @Get('revisiones')

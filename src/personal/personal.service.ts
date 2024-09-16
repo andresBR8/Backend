@@ -243,6 +243,18 @@ export class PersonalService {
 
     return personales;
   }
+  // Obtener todos los personales activos y sus activos
+  async findAll3(): Promise<any[]> {
+    const personales = await this.prisma.personal.findMany({
+      where: { activo: true },
+      include: {
+        cargo: true,
+        unidad: true,
+      },
+    });
+
+    return personales;
+  }
    // Crear revisión periódica (20 de diciembre)
   async createPeriodicRevision(): Promise<void> {
     const fechaRevision = new Date();
