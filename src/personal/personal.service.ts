@@ -235,26 +235,55 @@ export class PersonalService {
   // Obtener todos los personales y sus activos
   async findAll2(): Promise<any[]> {
     const personales = await this.prisma.personal.findMany({
-      include: {
-        cargo: true,
-        unidad: true,
+      select: {
+        id: true,               // Devuelve el ID del personal
+        nombre: true,           // Devuelve el nombre del personal
+        ci: true,               // Devuelve el CI
+        activo: true,           // Incluye si el personal está activo o inactivo
+        cargo: {                // Incluye el cargo relacionado
+          select: {
+            id: true,           // Devuelve el ID del cargo
+            nombre: true,       // Devuelve el nombre del cargo
+          },
+        },
+        unidad: {               // Incluye la unidad relacionada
+          select: {
+            id: true,           // Devuelve el ID de la unidad
+            nombre: true,       // Devuelve el nombre de la unidad
+          },
+        },
       },
     });
-
-    return personales;
+  
+    return personales; // Devuelve la lista con los campos seleccionados
   }
+  
   // Obtener todos los personales activos y sus activos
   async findAll3(): Promise<any[]> {
     const personales = await this.prisma.personal.findMany({
-      where: { activo: true },
-      include: {
-        cargo: true,
-        unidad: true,
+      where: { activo: true }, // Solo el personal activo
+      select: {
+        id: true,               // Devuelve el ID del personal
+        nombre: true,           // Devuelve el nombre del personal
+        ci: true,               // Devuelve el CI
+        cargo: {                // Incluye el cargo relacionado
+          select: {
+            id: true,           // Devuelve el ID del cargo
+            nombre: true,       // Devuelve el nombre del cargo
+          },
+        },
+        unidad: {               // Incluye la unidad relacionada
+          select: {
+            id: true,           // Devuelve el ID de la unidad
+            nombre: true,       // Devuelve el nombre de la unidad
+          },
+        },
       },
     });
-
-    return personales;
+  
+    return personales; // Devuelve la lista con los campos seleccionados
   }
+  
    // Crear revisión periódica (20 de diciembre)
   async createPeriodicRevision(): Promise<void> {
     const fechaRevision = new Date();
