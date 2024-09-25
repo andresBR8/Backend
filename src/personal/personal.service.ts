@@ -14,7 +14,7 @@ export class PersonalService {
     const data = await this.parseCSV(file.buffer);
 
     const resumen = {
-      nuevosPersonales: [] as { nombre: string; ci: string }[],
+      nuevosPersonales: [] as { nombre: string; ci: string, email: string }[],
       nuevosCargos: new Set<string>(),   // Usamos un Set para evitar duplicados
       nuevasUnidades: new Set<string>(), // Usamos un Set para evitar duplicados
       personalInactivo: [] as { nombre: string; ci: string; motivo: string }[],
@@ -27,10 +27,10 @@ export class PersonalService {
 
     for (const row of data) {
       try {
-        const { nombre, ci, cargoNombre, unidadNombre } = row;
+        const { nombre, ci, cargoNombre, unidadNombre, email } = row;
 
         // Validar si faltan datos esenciales
-        if (!nombre || !ci || !cargoNombre || !unidadNombre) {
+        if (!nombre || !ci || !cargoNombre || !unidadNombre || !email) {
           resumen.errores.push({ fila: row, error: 'Datos incompletos en la fila.' });
           continue; // Pasar a la siguiente fila
         }
@@ -66,6 +66,9 @@ export class PersonalService {
             const unidadAnterior = await this.prisma.unidad.findUnique({ where: { id: personalExistente.fkUnidad } });
             cambios.push(`Cambio de unidad: ${unidadAnterior?.nombre} -> ${unidad.nombre}`);
           }
+          if (personalExistente.email !== email) {
+            cambios.push(`Cambio de email: ${personalExistente.email} -> ${email}`);
+          }
 
           if (cambios.length > 0) {
             // Guardar el historial de cambios
@@ -78,11 +81,11 @@ export class PersonalService {
               },
             });
 
-            // Actualizar el personal
-            await this.prisma.personal.update({
-              where: { ci },
-              data: { fkCargo: cargo.id, fkUnidad: unidad.id, activo: true },
-            });
+             // Actualizar el personal
+          await this.prisma.personal.update({
+            where: { ci },
+            data: { fkCargo: cargo.id, fkUnidad: unidad.id, email, activo: true },
+          });
 
             resumen.personalActualizado.push({
               nombre: personalExistente.nombre,
@@ -93,15 +96,16 @@ export class PersonalService {
             resumen.personalSinCambios += 1;
           }
         } else {
-          // Crear nuevo personal
-          const nuevoPersonal = await this.prisma.personal.create({
-            data: { nombre, ci, fkCargo: cargo.id, fkUnidad: unidad.id, activo: true },
-          });
+          // Crear nuevo personal con email
+        const nuevoPersonal = await this.prisma.personal.create({
+          data: { nombre, ci, fkCargo: cargo.id, fkUnidad: unidad.id, email, activo: true },
+        });
 
           // Registrar el nuevo personal en el resumen
           resumen.nuevosPersonales.push({
             nombre: nuevoPersonal.nombre,
             ci: nuevoPersonal.ci,
+            email: nuevoPersonal.email,
           });
 
           // Registrar el nuevo personal en el historial
@@ -209,6 +213,7 @@ async findAll(): Promise<any[]> {
       id: true,               // ID del personal
       nombre: true,           // Nombre del personal
       ci: true,               // CI
+      email: true,            // Email
       activo: true,           // Estado activo/inactivo
       cargo: {                // Cargo relacionado
         select: {

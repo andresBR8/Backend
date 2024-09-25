@@ -31,6 +31,7 @@ model Personal {
   id                       Int                   @id @default(autoincrement())
   nombre                   String
   ci                       String                @unique
+  email                    String                @unique
   fkCargo                  Int
   fkUnidad                 Int
   activo                   Boolean               @default(true) // Campo para marcar si está activo
@@ -41,8 +42,8 @@ model Personal {
   reasignacionesNuevas     Reasignacion[]        @relation("PersonalNuevo")
   devoluciones             Devolucion[]
   historialCargosUnidades  HistorialCargoUnidad[]
-  revisiones              Revision[]
-  revisionesPersonales    RevisionPersonal[]
+  revisiones               Revision[]
+  revisionesPersonales     RevisionPersonal[]
 
   @@map("personal")
   @@index([fkCargo])

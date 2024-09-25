@@ -4,12 +4,14 @@ import { Asignacion, Prisma } from '@prisma/client';
 import { CreateAsignacionDto } from './dto/create-asignacion.dto';
 import { UpdateAsignacionDto } from './dto/update-asignacion.dto';
 import { NotificationsService } from '../notificaciones/notificaciones.service';
+import { NotificationServiceCorreo } from 'src/notificaciones/notificaciones.service.correo';
 
 @Injectable()
 export class AsignacionService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private notificationsServiceCorreo: NotificationServiceCorreo
   ) {}
 
   async createAsignacion(createAsignacionDto: CreateAsignacionDto): Promise<{ message: string }> {
@@ -77,6 +79,7 @@ export class AsignacionService {
         }
       }
     });
+    const activos = [];
   
     // Actualizar cada unidad y registrar en el historial
     for (const activoUnidad of activosUnidades) {
@@ -109,6 +112,19 @@ export class AsignacionService {
             fechaCambio: new Date(),
           },
         });
+        // Agregar la información del activo a la variable activos
+      const activo = await this.prisma.activoUnidad.findUnique({
+        where: { id: unidadId },
+        select: {
+          id: true,
+          codigo: true,
+          costoActual: true,
+          estadoActual: true,
+          estadoCondicion: true,
+        }
+      });
+
+      activos.push(activo);
       }
     }
   
@@ -162,7 +178,8 @@ export class AsignacionService {
     };
   
     this.notificationsService.sendGeneralNotification('activo-modelo-changed', generalNotificationData);
-  
+
+  await this.notificationsServiceCorreo.sendAsignacionNotification(personal, asignacion, activos);
     return { message: 'Asignación realizada correctamente' };
   }
   
