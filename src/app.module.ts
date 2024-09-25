@@ -44,7 +44,7 @@ import { MailerModule } from '@nestjs-modules/mailer'; // Asegúrate de tener in
         secure: false, // true para 465, false para otros puertos
         auth: {
           user: 'activosfijosuaemi@gmail.com', // Tu usuario de correo
-          pass: process.env.MAIL_PASSWORD, // Tu contraseña de correo
+          pass: process.env.EMAIL_PASSWORD, // Tu contraseña de correo
         },
       },
       defaults: {
