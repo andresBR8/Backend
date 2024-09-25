@@ -41,7 +41,7 @@ import { MailerModule } from '@nestjs-modules/mailer'; // Asegúrate de tener in
       transport: {
         host: 'smtp.gmail.com', // Tu host de correo
         port: 587, // Puerto (por ejemplo, 587 para SMTP)
-        secure: true, // true para 465, false para otros puertos
+        secure: false, // true para 465, false para otros puertos
         auth: {
           user: 'activosfijosuaemi@gmail.com', // Tu usuario de correo
           pass: process.env.MAIL_PASSWORD, // Tu contraseña de correo
