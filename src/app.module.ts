@@ -43,12 +43,9 @@ import { MailerModule } from '@nestjs-modules/mailer'; // Asegúrate de tener in
         port: 587, // Puerto (por ejemplo, 587 para SMTP)
         secure: false, // true para 465, false para otros puertos
         auth: {
-          user: 'activosfijosuaemi@gmail.com', // Tu usuario de correo
+          user: 'activosfijosuaemi@gmail.com',
           pass: process.env.EMAIL_PASSWORD, // Tu contraseña de correo
         },
-      },
-      defaults: {
-        from: '"No Reply" <noreply@tudominio.com>', // Dirección por defecto del remitente
       },
     }),
     PersonalModule,

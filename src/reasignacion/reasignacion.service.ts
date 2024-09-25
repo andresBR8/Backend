@@ -2,17 +2,18 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma.service';
 import { CreateReasignacionDto } from './dto/create-reasignacion.dto';
 import { NotificationsService } from '../notificaciones/notificaciones.service';
+import { NotificationServiceCorreo } from 'src/notificaciones/notificaciones.service.correo';
 
 @Injectable()
 export class ReasignacionService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private notificationServiceCorreo: NotificationServiceCorreo
   ) {}
 
   async reasignarActivo(createReasignacionDto: CreateReasignacionDto): Promise<{ message: string }> {
-    const { fkActivoUnidad, fkUsuarioAnterior, fkUsuarioNuevo, fkPersonalAnterior, fkPersonalNuevo, detalle,avalReasignacion, fechaReasignacion } = createReasignacionDto;
-
+    const { fkActivoUnidad, fkUsuarioAnterior, fkUsuarioNuevo, fkPersonalAnterior, fkPersonalNuevo, detalle, avalReasignacion, fechaReasignacion } = createReasignacionDto;
 
     // Verificar la existencia de la unidad de activo y su estado
     const activoUnidad = await this.prisma.activoUnidad.findUnique({
@@ -28,8 +29,6 @@ export class ReasignacionService {
     if (activoUnidad.estadoCondicion === 'BAJA') {
       throw new BadRequestException('No se puede reasignar una unidad de activo que está de BAJA.');
     }
-
-    
 
     // Validar la existencia de los usuarios y personal
     const [usuarioAnterior, usuarioNuevo, personalAnterior, personalNuevo] = await Promise.all([
@@ -79,14 +78,13 @@ export class ReasignacionService {
         },
       });
 
-      // Construir el mensaje de notificación
-      const mensajeNotificacion = `Reasignación realizada: Usuario anterior: ${usuarioAnterior.name}, Usuario nuevo: ${usuarioNuevo.name}, Personal anterior: ${personalAnterior.nombre}, Personal nuevo: ${personalNuevo.nombre}`;
-
-      
+      // Enviar notificación de reasignación
+      await this.notificationServiceCorreo.sendReasignacionNotification(personalNuevo, nuevaReasignacion, [activoUnidad]);
 
       return { message: 'Reasignación realizada correctamente' };
     });
-  }
+}
+
 
   async getReasignaciones(): Promise<any[]> {
     return this.prisma.reasignacion.findMany({
