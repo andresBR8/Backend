@@ -86,11 +86,11 @@ export class DepreciacionService {
     if (!año || isNaN(año)) {
       throw new BadRequestException('El año proporcionado no es válido.');
     }
-
+  
     if (!Object.values(MetodoDepreciacion).includes(metodo)) {
       throw new BadRequestException('Método de depreciación no válido.');
     }
-
+  
     const activos = await this.prisma.activoUnidad.findMany({
       where: { costoActual: { gt: 0 } },
       include: { 
@@ -101,24 +101,39 @@ export class DepreciacionService {
         } 
       },
     });
-
+  
     if (activos.length === 0) {
       throw new NotFoundException('No se encontraron activos con costo válido.');
     }
-
+  
     const fechaFin = new Date(año, 11, 31);
-
+  
     const resultados = activos.map(activo => {
       const { activoModelo } = activo;
-      const { partida, fechaIngreso, costo } = activoModelo;
-
+      const { partida } = activoModelo;
+  
+      // Extraemos los campos adicionales que deseas
+      const {
+        nombre,
+        fechaIngreso,
+        costo,
+        codigoAnterior,
+        codigoNuevo,
+      } = activoModelo;
+  
       if (!partida || fechaIngreso > fechaFin) {
         return null;
       }
-
-      const valorDepreciacion = this.calcularDepreciacion(costo, partida.porcentajeDepreciacion, metodo, fechaIngreso, fechaFin);
+  
+      const valorDepreciacion = this.calcularDepreciacion(
+        costo,
+        partida.porcentajeDepreciacion,
+        metodo,
+        fechaIngreso,
+        fechaFin
+      );
       const nuevoCosto = costo - valorDepreciacion;
-
+  
       return {
         id: activo.id,
         codigo: activo.codigo,
@@ -127,15 +142,26 @@ export class DepreciacionService {
         nuevoCosto,
         metodo,
         periodo: año,
+        // Información adicional del ActivoModelo
+        nombre,
+        fechaIngreso,
+        costo,
+        codigoAnterior,
+        codigoNuevo,
+        // Información adicional de la Partida
+        partidaNombre: partida.nombre,
+        vidaUtil: partida.vidaUtil,
+        porcentajeDepreciacion: partida.porcentajeDepreciacion,
       };
     }).filter(result => result !== null);
-
+  
     if (resultados.length === 0) {
       throw new NotFoundException('No se encontraron activos válidos para el año y método seleccionados.');
     }
-
+  
     return resultados;
   }
+  
 
   async obtenerDepreciacionAñoActual() {
     const añoActual = new Date().getFullYear();
