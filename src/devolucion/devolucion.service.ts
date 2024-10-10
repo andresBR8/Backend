@@ -15,77 +15,89 @@ export class DevolucionService {
 
   async createDevolucion(createDevolucionDto: CreateDevolucionDto): Promise<{ message: string }> {
     const { fkUsuario, fkPersonal, fecha, detalle, actaDevolucion, activosUnidades } = createDevolucionDto;
-
-    // Validar la existencia del usuario y personal
+  
+    // Validar la existencia del usuario y personal fuera de la transacción
     const usuario = await this.prisma.user.findUnique({ where: { id: fkUsuario } });
     const personal = await this.prisma.personal.findUnique({ where: { id: fkPersonal } });
-
+  
     if (!usuario) throw new NotFoundException(`Usuario con ID ${fkUsuario} no encontrado`);
     if (!personal) throw new NotFoundException(`Personal con ID ${fkPersonal} no encontrado`);
-
-    // Iniciar transacción para asegurarnos de que todas las devoluciones se procesan correctamente
-    return await this.prisma.$transaction(async (prisma) => {
-        // Validar todas las unidades antes de crear las devoluciones
-        for (const activoUnidad of activosUnidades) {
-            const { fkActivoUnidad } = activoUnidad;
-
-            const unidad = await prisma.activoUnidad.findUnique({
-                where: { id: fkActivoUnidad },
-            });
-
-            // Validar si la unidad está asignada y si está asignada al personal actual
-            if (!unidad || !unidad.asignado || unidad.fkPersonalActual !== fkPersonal) {
-                throw new BadRequestException(
-                    `El activo con código ${unidad?.codigo || fkActivoUnidad} no está asignado al personal actual o ya ha sido devuelto.`
-                );
-            }
-        }
-
-        // Crear todas las devoluciones
-        for (const activoUnidad of activosUnidades) {
-            const { fkActivoUnidad } = activoUnidad;
-
-            // Crear devolución en la base de datos
-            const devolucion = await prisma.devolucion.create({
-                data: {
-                    fkUsuario,
-                    fkPersonal,
-                    fkActivoUnidad,
-                    actaDevolucion,
-                    fecha: new Date(fecha),
-                    detalle,
-                },
-            });
-
-            // Actualizar la unidad a "no asignada" y limpiar el campo `fkPersonalActual`
-            await prisma.activoUnidad.update({
-                where: { id: fkActivoUnidad },
-                data: {
-                    asignado: false,
-                    fkPersonalActual: null,
-                    estadoCondicion: 'DISPONIBLE',
-                },
-            });
-
-            // Registrar el cambio en el historial
-            await prisma.historialCambio.create({
-                data: {
-                    fkActivoUnidad,
-                    fkDevolucion: devolucion.id,
-                    tipoCambio: 'DEVOLUCION',
-                    detalle: `Unidad devuelta por ${personal.nombre}`,
-                    fechaCambio: new Date(),
-                },
-            });
-        }
-
-        // Enviar notificación de devolución
-        await this.notificationsServiceCorreo.sendDevolucionNotification(personal, { fecha, detalle, actaDevolucion }, activosUnidades);
-
-        return { message: 'Devoluciones realizadas correctamente' };
+  
+    // Validar todas las unidades fuera de la transacción
+    const activosIds = activosUnidades.map((activoUnidad) => activoUnidad.fkActivoUnidad);
+    const unidades = await this.prisma.activoUnidad.findMany({
+      where: {
+        id: { in: activosIds },
+        asignado: true,
+        fkPersonalActual: fkPersonal,
+      },
     });
-}
-
+  
+    if (unidades.length !== activosUnidades.length) {
+      throw new BadRequestException('Algunas unidades no están asignadas al personal actual o ya han sido devueltas.');
+    }
+  
+    // Iniciar la transacción para las devoluciones y actualizaciones
+    return await this.prisma.$transaction(async (prisma) => {
+      const activosDevueltos = [];
+  
+      // Crear todas las devoluciones y actualizar las unidades
+      const devoluciones = activosUnidades.map(async (activoUnidad) => {
+        const { fkActivoUnidad } = activoUnidad;
+  
+        // Crear devolución
+        const devolucion = await prisma.devolucion.create({
+          data: {
+            fkUsuario,
+            fkPersonal,
+            fkActivoUnidad,
+            actaDevolucion,
+            fecha: new Date(fecha),
+            detalle,
+          },
+        });
+  
+        // Actualizar el activo a no asignado y disponible
+        const unidadActualizada = await prisma.activoUnidad.update({
+          where: { id: fkActivoUnidad },
+          data: {
+            asignado: false,
+            fkPersonalActual: null,
+            estadoCondicion: 'DISPONIBLE',
+          },
+          include: { activoModelo: true },
+        });
+  
+        // Agregar la información del activo devuelto
+        activosDevueltos.push({
+          id: unidadActualizada.id,
+          nombre: unidadActualizada.activoModelo.nombre,
+          codigo: unidadActualizada.codigo,
+          estadoCondicion: unidadActualizada.estadoCondicion,
+        });
+  
+        // Registrar el cambio en el historial
+        await prisma.historialCambio.create({
+          data: {
+            fkActivoUnidad,
+            fkDevolucion: devolucion.id,
+            tipoCambio: 'DEVOLUCION',
+            detalle: `Unidad devuelta por ${personal.nombre}`,
+            fechaCambio: new Date(),
+          },
+        });
+      });
+  
+      // Esperar a que todas las devoluciones se completen
+      await Promise.all(devoluciones);
+  
+      // Enviar notificación
+      await this.notificationsServiceCorreo.sendDevolucionNotification(personal, { fecha, detalle, actaDevolucion }, activosDevueltos);
+  
+      return { message: 'Devoluciones realizadas correctamente' };
+    });
+  }
+  
   
 
   // Función para obtener todas las devoluciones

@@ -121,7 +121,7 @@ export class NotificationServiceCorreo {
                   ${activos.map((activo, index) => `
                     <tr style="background-color: ${index % 2 === 0 ? '#f8f8f8' : 'white'};">
                       <td style="padding: 10px; border-top: 1px solid #ddd;">${activo.id}</td>
-                      <td style="padding: 10px; border-top: 1px solid #ddd;">${activo.nombre}</td>
+                      <td style="padding: 10px; border-top: 1px solid #ddd;">${activo.activoModelo.nombre}</td>
                       <td style="padding: 10px; border-top: 1px solid #ddd;">${activo.codigo}</td>
                       <td style="padding: 10px; border-top: 1px solid #ddd;">${activo.estadoCondicion}</td>
                     </tr>`).join('')}
@@ -136,12 +136,13 @@ export class NotificationServiceCorreo {
         </div>
       </body>
       </html>`;
-
+  
     await this.sendNotification('Reasignación de Activos - Notificación Importante', htmlTemplate, personalNuevo.email);
-}
+  }
+  
 
   
-  async sendDevolucionNotification(personal: any, devolucion: any, activos: any[]) {
+async sendDevolucionNotification(personal: any, devolucion: any, activos: any[]) {
     const htmlTemplate = `
       <!DOCTYPE html>
       <html lang="es">
@@ -157,7 +158,7 @@ export class NotificationServiceCorreo {
           </div>
           <div style="padding: 30px; background-color: #ffffff;">
             <p style="margin-top: 0;">Estimado(a) <strong>${personal.nombre}</strong>,</p>
-            <p>Le informamos que se ha registrado una devolución de activos a su nombre el <strong>${devolucion.fecha.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>.</p>
+            <p>Le informamos que se ha registrado una devolución de activos a su nombre el <strong>${new Date(devolucion.fecha).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>.</p>
             <div style="background-color: #fff5e6; padding: 15px; border-radius: 5px; margin: 20px 0;">
               <h3 style="color: #FFA500; margin-top: 0;">Detalles de la Devolución:</h3>
               <p style="margin-bottom: 0;">${devolucion.detalle}</p>
@@ -198,4 +199,6 @@ export class NotificationServiceCorreo {
     
     await this.sendNotification('Devolución de Activos - Notificación Importante', htmlTemplate, personal.email);
   }
+  
+  
 }

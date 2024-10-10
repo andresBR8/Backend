@@ -54,6 +54,7 @@ export class ActivoModeloService {
         },
       },
       cantidad,
+      
     };
   
     const activoModelo = await this.prisma.activoModelo.create({

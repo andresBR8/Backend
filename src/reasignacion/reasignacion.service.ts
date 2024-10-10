@@ -14,34 +14,34 @@ export class ReasignacionService {
 
   async reasignarActivo(createReasignacionDto: CreateReasignacionDto): Promise<{ message: string }> {
     const { fkActivoUnidad, fkUsuarioAnterior, fkUsuarioNuevo, fkPersonalAnterior, fkPersonalNuevo, detalle, avalReasignacion, fechaReasignacion } = createReasignacionDto;
-
+  
     // Verificar la existencia de la unidad de activo y su estado
     const activoUnidad = await this.prisma.activoUnidad.findUnique({
       where: { id: fkActivoUnidad },
-      select: { id: true, estadoCondicion: true },
+      select: { id: true, estadoCondicion: true,codigo: true, activoModelo: { select: { nombre: true } } },
     });
-
+  
     if (!activoUnidad) {
       throw new NotFoundException('La unidad de activo no existe.');
     }
-
+  
     // Validar que el activo no esté en estado "baja"
     if (activoUnidad.estadoCondicion === 'BAJA') {
       throw new BadRequestException('No se puede reasignar una unidad de activo que está de BAJA.');
     }
-
-    // Validar la existencia de los usuarios y personal
+  
+    // Validar la existencia de los usuarios y personal, incluyendo el email de `personalNuevo`
     const [usuarioAnterior, usuarioNuevo, personalAnterior, personalNuevo] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: fkUsuarioAnterior }, select: { id: true, name: true } }),
       this.prisma.user.findUnique({ where: { id: fkUsuarioNuevo }, select: { id: true, name: true } }),
       this.prisma.personal.findUnique({ where: { id: fkPersonalAnterior }, select: { id: true, nombre: true } }),
-      this.prisma.personal.findUnique({ where: { id: fkPersonalNuevo }, select: { id: true, nombre: true } }),
+      this.prisma.personal.findUnique({ where: { id: fkPersonalNuevo }, select: { id: true, nombre: true, email: true } }), // Incluir el email
     ]);
-
+  
     if (!usuarioAnterior || !usuarioNuevo || !personalAnterior || !personalNuevo) {
       throw new NotFoundException('Información de usuario o personal no encontrada.');
     }
-
+  
     return this.prisma.$transaction(async (prisma) => {
       // Mantener el estado del activo como asignado y cambiar el estado a REASIGNADO
       await prisma.activoUnidad.update({
@@ -52,7 +52,7 @@ export class ReasignacionService {
           fkPersonalActual: fkPersonalNuevo,
         },
       });
-
+  
       // Registrar la reasignación
       const nuevaReasignacion = await prisma.reasignacion.create({
         data: {
@@ -66,7 +66,7 @@ export class ReasignacionService {
           detalle,
         },
       });
-
+  
       // Registrar en el historial de cambios
       await prisma.historialCambio.create({
         data: {
@@ -77,13 +77,14 @@ export class ReasignacionService {
           fechaCambio: new Date(),
         },
       });
-
-      // Enviar notificación de reasignación
+      console.log(personalNuevo, nuevaReasignacion, [activoUnidad])
+      // Enviar notificación de reasignación con el email del personal nuevo
       await this.notificationServiceCorreo.sendReasignacionNotification(personalNuevo, nuevaReasignacion, [activoUnidad]);
-
+  
       return { message: 'Reasignación realizada correctamente' };
     });
-}
+  }
+  
 
 
   async getReasignaciones(): Promise<any[]> {

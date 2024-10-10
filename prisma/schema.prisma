@@ -129,6 +129,8 @@ model ActivoUnidad {
   estadoActual        String
   estadoCondicion     String
   fkPersonalActual    Int?                     // Nuevo campo para guardar el personal actual asignado
+  vidaUtilCumplida    Boolean                  @default(false) // Indicador si el activo ha cumplido su vida útil.
+  fechaUltimaDepreciacion DateTime?            // Fecha en que se realizó la última depreciación.
   activoModelo        ActivoModelo             @relation(fields: [fkActivoModelo], references: [id])
   asignacionActivos   AsignacionActivoUnidad[]
   bajas               Baja[]
