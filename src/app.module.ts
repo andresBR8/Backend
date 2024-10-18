@@ -30,6 +30,7 @@ import { DevolucionModule } from './devolucion/devolucion.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ConfigModule } from '@nestjs/config';
 import { MailerModule } from '@nestjs-modules/mailer'; // Asegúrate de tener instalado este módulo
+import { PruebaNestModule } from './prueba_nest/prueba_nest.module';
 
 
 
@@ -71,6 +72,7 @@ import { MailerModule } from '@nestjs-modules/mailer'; // Asegúrate de tener in
     SeguimientoModule,
     DevolucionModule,
     DashboardModule,
+    PruebaNestModule,
     
   ],
   controllers: [HelloController, UploadController],
